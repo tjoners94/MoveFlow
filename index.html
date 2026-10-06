@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#e0f2fe">
+  <title>Move Flow</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="screens.css">
+</head>
+<body>
+  <div id="app">
+    <header id="hud">
+      <div class="hud-row">
+        <div class="brand" id="hud-title"><b>Move Flow</b> <span id="hud-job"></span></div>
+        <div class="spacer"></div>
+        <button class="squircle" id="speed-btn" type="button" title="Simulation speed" hidden>⏩ 1×</button>
+        <button class="squircle" id="info-btn" type="button" aria-label="Job information" title="Job information">ℹ️</button>
+        <button class="squircle" id="mute-btn" type="button" aria-label="Toggle sound" title="Sound">🔊</button>
+        <button class="squircle yellow" id="pause-btn" type="button" title="Return to Main Menu">Main Menu</button>
+        <button class="squircle danger" id="abort-btn" type="button">Abort Job</button>
+        <button class="squircle primary" id="finish-btn" type="button">Execute</button>
+      </div>
+      <div id="hud-meters" aria-label="Job meters"></div>
+    </header>
+
+    <main id="stage">
+      <div id="floor-nav" hidden></div>
+      <div id="board-row">
+        <aside id="emp-card" aria-label="Employee information" hidden>
+          <button class="legend-pin" id="emp-pin" type="button" aria-pressed="false" title="Pin the employee info beside the floor plan">📌</button>
+          <div id="emp-card-body"></div>
+        </aside>
+        <svg id="game-board" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div id="zoom-controls">
+        <button class="squircle zoom-btn analyze-btn" id="analyze-btn" type="button" aria-pressed="false" aria-label="Analyze" title="Analyze: dim the floor plans and chart seating and departments">📊</button>
+        <button class="squircle zoom-btn" id="zoom-out" type="button" aria-label="Zoom out">&minus;</button>
+        <button class="squircle zoom-btn" id="zoom-in" type="button" aria-label="Zoom in">+</button>
+      </div>
+      <div id="toast" hidden></div>
+      <div id="exec-summary" hidden>
+        <div class="sum-confetti" id="sum-confetti" aria-hidden="true"></div>
+        <div class="sum-title">🎉 Move Complete!</div>
+        <div class="sum-chips" id="sum-chips"></div>
+        <div class="sum-hint" id="sum-hint"></div>
+      </div>
+      <div id="exec-status" hidden>
+        <div id="exec-log" hidden aria-label="Task log"></div>
+        <div class="exec-head">
+          <span class="exec-spinner" aria-hidden="true"></span>
+          <span id="exec-status-text"></span>
+          <span id="exec-count"></span>
+          <button id="exec-toggle" type="button" aria-expanded="false" aria-label="Show task log" title="Show or hide the task log">&#9650;</button>
+        </div>
+        <div class="exec-stages">
+          <div class="exec-stage active" id="stage-moving"><span class="exec-stage-name">Moving</span><div class="exec-status-bar"><span id="exec-fill-moving"></span></div></div>
+          <div class="exec-stage" id="stage-feedback"><span class="exec-stage-name">Feedback</span><div class="exec-status-bar"><span id="exec-fill-feedback"></span></div></div>
+        </div>
+      </div>
+      <div id="legend" aria-label="Legend"></div>
+    </main>
+
+    <aside id="side">
+      <h2>Departments<button class="unassign-btn" id="unassign-all-btn" type="button" title="Unassign All: send every seated employee back to the roster" aria-label="Unassign All">🗑️</button></h2>
+      <section id="tray" aria-label="Departments"></section>
+    </aside>
+
+    <section id="org-panel" aria-label="Org chart">
+      <h2>Org Chart <span id="org-title"></span><button class="unassign-btn" id="unassign-dept-btn" type="button" title="Unassign All: send this department back to the roster" aria-label="Unassign All">🗑️</button></h2>
+      <div id="org-tree"></div>
+    </section>
+  </div>
+
+  <div id="result" class="overlay" hidden></div>
+  <div id="screens"></div>
+  <div id="modal-root"></div>
+
+  <div id="loading" hidden role="status" aria-live="polite">
+    <div class="loading-card"><div class="loading-spinner"></div><div id="loading-text">Building floor plans…</div></div>
+  </div>
+  <script src="dev.js"></script>
+  <script src="fx.js"></script>
+  <script src="save.js"></script>
+  <script src="rooms.js"></script>
+  <script src="jobs.js"></script>
+  <script src="perks.js"></script>
+  <script src="bsp.js"></script>
+  <script src="pathfinding.js"></script>
+  <script src="campus.js"></script>
+  <script src="people.js"></script>
+  <script src="exec.js"></script>
+  <script src="viewer.js"></script>
+  <script src="witness.js"></script>
+  <script src="solver.js"></script>
+  <script src="app.js"></script>
+  <script src="ui.js"></script>
+</body>
+</html>
