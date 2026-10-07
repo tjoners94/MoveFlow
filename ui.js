@@ -394,6 +394,7 @@ const UI = (() => {
           })(),
           tile('btn-branding', '🎨', 'Branding', 'Uniforms, vehicles, name', () => show('branding')))),
       h('div', { class: 'row menu-foot' },
+        h('button', { id: 'btn-leaderboards', class: 'squircle', onclick: () => Leaderboard.open() }, '🏆 Leaderboard'),
         h('button', { id: 'btn-settings', class: 'squircle', onclick: () => show('settings') }, '⚙️ Settings')));
     return root;
   }
@@ -408,6 +409,7 @@ const UI = (() => {
       { target: '#btn-upgrades', text: 'Upgrade your crew with money earned from jobs.' },
       { target: '#btn-unlocks', text: 'View unlocked hires, clients, and branding options.' },
       { target: '#btn-branding', text: 'Change your uniform, vehicle, and company name.' },
+      { target: '#btn-leaderboards', text: 'See how your company ranks against rival movers, by jobs done or total earned.' },
       { target: '#btn-settings', text: 'Adjust audio, effects, layout, and appearance.' }
     ], () => Save.markTutorial('menu'));
   }
@@ -607,7 +609,8 @@ const UI = (() => {
         h('div', { class: 'stat-row' },
           stat('Employees', job.employees), stat('Spare Desks', spareDesks(job)),
           stat('Time Limit', job.timeLimit ? formatClock(job.timeLimit) : '∞'),
-          stat('Cargo', cargoLabel(job.cargoLoad ?? 0.25))),
+          stat('Cargo', cargoLabel(job.cargoLoad ?? 0.25)),
+          stat('Time of Day', `${timeOf(job).icon} ${timeOf(job).name}`)),
         base.campaign || (info && !activeMods().length) ? null : modifiersBox(),
         rewards(),
         instructions(),

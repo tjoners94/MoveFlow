@@ -95,6 +95,7 @@ function buildCampus(plan, o) {
     const layout = BSPNode.generateFit(fitW, fitH, {
       minSize: o.minSize, maxSize: o.maxSize, seats: fl.seats, offices: offices[i], phones: phones[i], cafes: cafes[i], lounges: o.lounges || 0,
       reception: o.reception && fl.b === 0 && fl.f === 0, specials: fl.specials, upper: fl.f > 0,
+      tall: plan.floors.some((x) => x.b === fl.b && x.f > 0),
       seed: o.seed + i * 104729, shellSeed: o.seed + fl.b * 65537 + 17,
       ...(shared ? { size: shared.size, plain: shared.plain, tries: fl.seats > 20 ? 8 : 4 } : {})
     });

@@ -28,7 +28,7 @@ const HIRES = [
 
 // Optional riders on Random Jobs: each makes the contract harder and pays more.
 const MODIFIERS = [
-  { id: 'noElevators', icon: '🪜', name: 'No Elevators', desc: 'Movers must take the stairs, adding 30s per floor above ground.' },
+  { id: 'noElevators', icon: '🪜', name: 'No Elevators', desc: 'Movers and employees must take the stairs, adding 6s per floor above ground each way.' },
   { id: 'fragile', icon: '🍷', name: 'Fragile Goods', desc: 'Objects can break and must be replaced; every breakage is deducted from the payout.' },
   { id: 'rush', icon: '⏳', name: 'Rush Job', desc: 'Time limit cut in half.' },
   { id: 'flooring', icon: '🧱', name: 'Protective Flooring', desc: 'Movers deploy protective flooring before carrying objects to their assigned desks.' },
@@ -69,8 +69,8 @@ const Perks = (() => {
     walkMult: () => (hire(4) ? 0.75 : 1),
     // Movers use the stairs when No Elevators is on; otherwise the service elevator (or loading dock on the ground floor).
     stairsOnly: () => mod('noElevators'),
-    // Seconds Movers need to reach each floor above ground: instant by elevator, 30s per floor by stairs.
-    floorTransit: () => (mod('noElevators') && !hire(6) ? 30 : 0),
+    // Movers (and employees) climbing stairs with No Elevators: seconds per floor, each way.
+    stairSecs: () => (mod('noElevators') && !hire(6) ? 6 : 0),
     // Protective Flooring: time Movers spend on every tile going out. Cleaning: vacuuming time per tile coming back.
     flooringSecs: () => (mod('flooring') ? 0.1 : 0),
     vacuumSecs: () => (mod('cleaning') ? 0.1 : 0),

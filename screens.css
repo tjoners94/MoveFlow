@@ -101,6 +101,40 @@ button.squircle { font-family: var(--font-stack); }
 .how-link { text-decoration: none; display: inline-block; }
 .start-credit { position: absolute; right: 16px; bottom: 12px; font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--text-dark); opacity: .5; pointer-events: none; user-select: none; }
 
+/* Leaderboards */
+.modal.board { width: min(760px, 96vw); height: 86vh; }
+.modal.board .modal-content { flex: 1; min-height: 0; overflow: hidden; display: flex; margin-top: 8px; }
+.lb-layout { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; min-height: 0; }
+.modal-content p.lb-sub { margin: 0; font-size: 12px; color: var(--text-muted); }
+.lb-tabs { display: flex; align-items: center; gap: 8px; }
+.lb-sortlabel { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+.lb-tab { padding: 6px 14px; font-size: 13px; cursor: pointer; }
+.lb-tab.on { background: #fde68a; border-color: #f59e0b; color: #78350f; }
+.lb-row { display: grid; grid-template-columns: 52px minmax(0, 1fr) 118px 84px 130px; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; font-size: 14px; font-weight: 700; }
+.lb-head { padding-top: 0; padding-bottom: 0; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); }
+.lb-list { flex: 1; min-height: 0; overflow-y: scroll; display: flex; flex-direction: column; gap: 4px; padding-right: 6px; scrollbar-width: auto; }
+.lb-list .lb-row { background: var(--card-bg); border: 1px solid var(--border-faint); }
+.lb-rank { text-align: center; font-weight: 900; }
+.lb-co { display: flex; align-items: center; gap: 8px; min-width: 0; text-align: left; }
+.lb-logo { font-size: 20px; line-height: 1; }
+.lb-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dark); }
+.lb-you { flex: none; padding: 1px 6px; border-radius: 999px; background: #3b82f6; color: #fff; font-size: 10px; letter-spacing: .05em; }
+.lb-rate { font-size: 12px; white-space: nowrap; }
+.lb-val { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.lb-val.sorted { color: var(--text-dark); font-weight: 900; }
+.lb-row.top { background: linear-gradient(90deg, #fef3c7, #fde68a); border-color: #f59e0b; }
+.lb-row.top .lb-name, .lb-row.top .lb-val { color: #78350f; }
+.lb-list .lb-row.you { border: 2px solid #3b82f6; background: rgba(59, 130, 246, .12); }
+.lb-row.flash { animation: lbFlash 1.4s ease; }
+@keyframes lbFlash { 0%, 100% { box-shadow: none; } 25%, 65% { box-shadow: 0 0 0 4px rgba(245, 158, 11, .8); } }
+.lb-foot { display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 2px solid var(--border-muted); }
+.lb-foot .lb-row { flex: 1; min-width: 0; border: 2px solid #3b82f6; background: rgba(59, 130, 246, .12); }
+.lb-find { flex: none; width: 44px; height: 44px; padding: 0; font-size: 20px; cursor: pointer; }
+@media (max-width: 720px) {
+  .lb-row { grid-template-columns: 40px minmax(0, 1fr) 56px 96px; font-size: 12px; }
+  .lb-row > :nth-child(3) { display: none; }
+}
+
 /* Wiki */
 .modal.wiki { width: min(1100px, 96vw); height: 86vh; }
 .modal.wiki .modal-content { flex: 1; min-height: 0; overflow: hidden; display: flex; margin-top: 12px; }
@@ -314,7 +348,7 @@ input[type=text]:focus { border-color: #3b82f6; }
 .brand-option { font-size: 34px; padding: 16px 0; border-radius: 16px; border: 2px solid transparent; background: var(--border-faint); cursor: pointer; }
 .brand-option.picked { border-color: #22c55e; }
 .brand-option.locked { opacity: .5; }
-.stat-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
+.stat-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
 .modal-content .brief-h { margin: 16px 0 4px; padding-bottom: 3px; border-bottom: 2px solid var(--border-faint); font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
 .modal-content .brief-sh { margin: 8px 0 4px; font-size: 11px; font-weight: 800; color: var(--text-muted); }
 .modal-content p.brief-name { margin: 2px 0; font-size: 17px; font-weight: 800; color: var(--text-dark); }

@@ -40,7 +40,9 @@ const UTILITY_ROOMS = {
   copy: { label: 'COPY / PRINT', name: 'Copy / Print Room', w: 5, h: 5, minW: 5, minH: 5, max: 2, seats: 0, fill: '#e2e8f0', fixture: 'machine', fx: '#94a3b8' },
   storage: { label: 'STORAGE', name: 'Storage', w: 6, h: 5, minW: 5, minH: 4, max: 3, seats: 0, fill: '#e7e5e4', fixture: 'shelf', fx: '#a8a29e' }
 };
-const ROOM_DEFS = { ...UTILITY_ROOMS, ...SPECIAL_ROOMS };
+// The ground floor's loading dock room: no seats, furnished only by the company truck.
+const DOCK_ROOM = { label: 'LOADING DOCK', name: 'Dock Bay', seats: 0, fill: '#fed7aa' };
+const ROOM_DEFS = { ...UTILITY_ROOMS, ...SPECIAL_ROOMS, dock: DOCK_ROOM };
 
 // Client Types (Unlocks menu) and the rooms each one calls for.
 const INDUSTRIES = {

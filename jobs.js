@@ -7,6 +7,16 @@ const spareDesks = (job) => Math.ceil(job.employees * SPARE_DESK_SHARE);
 
 // Jobs without an industry are a general office.
 const GENERAL_INDUSTRY = { icon: '\ud83d\udcbc', name: 'General Office' };
+
+// Visual only: sets the lighting on the floor plan (see lighting.js).
+const TIMES_OF_DAY = {
+  morning: { name: 'Morning', icon: '\ud83c\udf05' },
+  noon: { name: 'Noon', icon: '\u2600\ufe0f' },
+  evening: { name: 'Evening', icon: '\ud83c\udf07' },
+  night: { name: 'Night', icon: '\ud83c\udf19' }
+};
+const TIME_KEYS = Object.keys(TIMES_OF_DAY);
+const timeOf = (job) => TIMES_OF_DAY[job?.timeOfDay] || TIMES_OF_DAY.noon;
 const industryOf = (job) => INDUSTRIES[job.industry] || GENERAL_INDUSTRY;
 
 // Parody clients per industry: [name, one-line description].
@@ -101,7 +111,7 @@ const CAMPAIGN = [
   { id: 'c6', icon: '🔴', name: 'Skyscraper Drop', desc: 'Pack a university department into a three-floor tower.', industry: 'university', employees: 12, timeLimit: 300, rewardMult: 2, seed: 606 },
   { id: 'c7', icon: '🟡', name: 'Rush Hour', desc: 'The research lab opens Monday, split across two buildings.', industry: 'research', employees: 12, timeLimit: 240, rewardMult: 2.4, seed: 707 },
   { id: 'c8', icon: '🔴', name: 'Grand Finale', desc: 'Relocate a media station: studio lot plus admin tower.', industry: 'media', employees: 12, timeLimit: 180, rewardMult: 3, seed: 808 }
-].map((j, i) => ({ ...j, campaign: true, specials: { ...INDUSTRIES[j.industry].rooms }, client: clientFor(j.industry, i) }));
+].map((j, i) => ({ ...j, campaign: true, timeOfDay: TIME_KEYS[i % TIME_KEYS.length], specials: { ...INDUSTRIES[j.industry].rooms }, client: clientFor(j.industry, i) }));
 
 // Thematic campuses: which buildings a mission spans, how tall they are, and which industry rooms live where.
 const CAMPAIGN_SITES = {
@@ -168,7 +178,8 @@ function makeRandomJob(t) {
   const employees = lo + Math.floor(Math.random() * (hi - lo + 1));
   const job = {
     id: `r-${t.tier}`, name: t.name, icon: t.icon, campaign: false, employees,
-    timeLimit: tierTimeLimit(t, employees), rewardMult: t.rewardMult, satGoal: t.satGoal, cargoLoad: t.cargoLoad, seed: 0
+    timeLimit: tierTimeLimit(t, employees), rewardMult: t.rewardMult, satGoal: t.satGoal, cargoLoad: t.cargoLoad, seed: 0,
+    timeOfDay: TIME_KEYS[Math.floor(Math.random() * TIME_KEYS.length)]
   };
   const client = pickClient(employees);
   job.client = clientFor(client, Math.floor(Math.random() * 1000));

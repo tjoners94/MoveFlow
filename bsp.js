@@ -62,7 +62,7 @@ class BSPNode {
    * Workstation = desk cells (blocked) + a walkable chair cell (the path destination).
    * Returns { grid, rooms, workstations, doors, decor, windows, entrance, elements, ... }.
    */
-  static generate(width, height, { minSize = 10, maxSize = 22, cellSize = 10, seed = Date.now(), seats = 0, offices = 0, phones = 0, reception = false, cafes = 0, lounges = 0, specials = {}, plain = false, upper = false, shellSeed } = {}) {
+  static generate(width, height, { minSize = 10, maxSize = 22, cellSize = 10, seed = Date.now(), seats = 0, offices = 0, phones = 0, reception = false, cafes = 0, lounges = 0, specials = {}, plain = false, upper = false, tall = false, shellSeed } = {}) {
     let seedState = seed >>> 0;
     const rng = () => ((seedState = (seedState * 1664525 + 1013904223) >>> 0) / 4294967296);
 
@@ -87,6 +87,27 @@ class BSPNode {
         }
       }
     }
+    // Structural columns, set right after the shell: a lattice with a random bay width, built into the straight stretches of the
+    // exterior wall. It comes from the building's shell seed, so every floor of a building gets the same columns, and
+    // nothing (windows, the entrance, the dock) is ever placed on one.
+    const colRng = (() => {
+      let st = (((shellSeed ?? seed) >>> 0) ^ 0x9e3779b9) >>> 0;
+      return () => ((st = (st * 1664525 + 1013904223) >>> 0) / 4294967296);
+    })();
+    const bay = 6 + Math.floor(colRng() * 7);
+    const bayX = Math.floor(colRng() * bay);
+    const bayY = Math.floor(colRng() * bay);
+    const columns = [];
+    for (const key of extWalls) {
+      const [x, y] = key.split(',').map(Number);
+      const ou = outAt(x, y - 1);
+      const od = outAt(x, y + 1);
+      const ol = outAt(x - 1, y);
+      const or = outAt(x + 1, y);
+      if (ou !== od && !ol && !or) { if ((x + bayX) % bay === 0) columns.push({ x, y, nx: 0, ny: ou ? -1 : 1 }); }
+      else if (ol !== or && !ou && !od) { if ((y + bayY) % bay === 0) columns.push({ x, y, nx: ol ? -1 : 1, ny: 0 }); }
+    }
+    const columnAt = new Set(columns.map((c) => `${c.x},${c.y}`));
     let interiorCount = 0;
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (grid[y][x] === CELL.HALL) interiorCount++;
 
@@ -119,7 +140,7 @@ class BSPNode {
     let entrance = { x: midX, y: height - 2 };
     let entranceCells = [];
     const placeEntrance = (want) => {
-      const flat = (c) => [c - 1, c, c + 1].every((x) => grid[height - 1][x] === CELL.WALL);
+      const flat = (c) => [c - 1, c, c + 1].every((x) => grid[height - 1][x] === CELL.WALL && !columnAt.has(`${x},${height - 1}`));
       let cx = want;
       for (let d = 0; d < width && !flat(cx); d++) cx = [want + d, want - d].find(flat) ?? cx;
       entrance = { x: cx, y: height - 2 };
@@ -143,6 +164,8 @@ class BSPNode {
         if (y % 10 >= 4 && y % 10 < 8) windows.push({ x, y, h: false });
       }
     }
+
+    windows.splice(0, windows.length, ...windows.filter((w) => !columnAt.has(`${w.x},${w.y}`)));
 
     // Seat budget: headcount plus the spare-desk share of assignable seats; phone booths are shared and sit on top of that.
     const phonesAsked = Math.max(0, phones);
@@ -170,11 +193,13 @@ class BSPNode {
       workstations.push(ws);
       room.desks.push(ws.id);
     };
-    const addDecor = (type, x, y, w, h, color) => {
-      decor.push({ type, x, y, w, h, color });
+    const addDecor = (type, x, y, w, h, color, extra = {}) => {
+      decor.push({ type, x, y, w, h, color, ...extra });
       if (type === 'chair') return;
       for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) grid[yy][xx] = CELL.DECOR;
     };
+    // Wall-mounted TVs and whiteboards: drawn on the inner face of the wall cell at (x, y), len cells long; they take no floor.
+    const addWall = (type, side, x, y, len) => { decor.push({ type, side, x, y, w: len, h: 1 }); };
     const newRoom = (type, x, y, w, h, label) => {
       const room = { id: rooms.length, type, x, y, w, h, desks: [], label, top: true };
       rooms.push(room);
@@ -280,12 +305,57 @@ class BSPNode {
         } else {
           addDecor('table', dx, room.y + 2, 3, 1);
         }
-        addDecor('sofa', room.x + 1, room.y + h - 1, Math.min(4, w - 2), 1);
+        addDecor('sofa', room.x + 1, room.y + h - 1, Math.min(4, w - 2), 1, undefined, { back: 'bottom' });
         if (w >= 8) addDecor('plant', room.x + w - 2, room.y + h - 1, 1, 1);
         if (l.ext.bottom) entranceX = room.x + Math.floor(w / 2);
       }
       placeEntrance(entranceX);
       windows.splice(0, windows.length, ...windows.filter((w) => !(w.y === height - 1 && Math.abs(w.x - entrance.x) <= 5)));
+    }
+
+    // Loading dock (ground floor): mostly a feature of multi-storey buildings. A walled room against an exterior wall, well away
+    // from the entrance, with a street door in that wall and a door onto the hall like any other room. The company truck is
+    // drawn in its middle. Without one, Movers come in through the main entrance.
+    let dock = null;
+    if (!upper && rng() < (tall ? 0.9 : 0.15)) {
+      const sides = { top: [0, -1], bottom: [0, 1], left: [-1, 0], right: [1, 0] };
+      const cands = [];
+      for (const l of free()) {
+        for (const [side, [nx, ny]] of Object.entries(sides)) {
+          if (!l.ext[side]) continue;
+          for (const [len, depth] of [[11, 8], [9, 7]]) {
+            const w = nx ? depth : len;
+            const h = nx ? len : depth;
+            if (l.ew < w || l.eh < h) continue;
+            const x = side === 'right' ? l.ex2 - w + 1 : side === 'left' ? l.ex : l.ex + Math.floor((l.ew - w) / 2);
+            const y = side === 'bottom' ? l.ey2 - h + 1 : side === 'top' ? l.ey : l.ey + Math.floor((l.eh - h) / 2);
+            const d = Math.abs(x + w / 2 - entrance.x) + Math.abs(y + h / 2 - entrance.y);
+            if (d >= 14) cands.push({ l, side, nx, ny, x, y, w, h, d });
+            break;
+          }
+        }
+      }
+      // Prefer the leaf the room fits most snugly, so little floor is lost to it.
+      cands.sort((a, b) => a.l.ew * a.l.eh - a.w * a.h - (b.l.ew * b.l.eh - b.w * b.h));
+      const c = cands[Math.floor(rng() * Math.min(3, cands.length))];
+      if (c) {
+        used.add(c.l.i);
+        const room = newRoom('dock', c.x, c.y, c.w, c.h, '');
+        carve(room, true);
+        room.top = c.ny > 0 ? true : c.ny < 0 ? false : rng() < 0.5;
+        addDoor(room, c.x + 1 + Math.floor(rng() * (c.w - 2)), room.top ? c.y : c.y + c.h - 1);
+        // Street door: three cells of the exterior wall, centred on the room and clear of structural columns.
+        const along = c.nx ? Array.from({ length: c.h - 4 }, (_, k) => c.y + 2 + k) : Array.from({ length: c.w - 4 }, (_, k) => c.x + 2 + k);
+        const wallX = c.nx > 0 ? c.x + c.w - 1 : c.x;
+        const wallY = c.ny > 0 ? c.y + c.h - 1 : c.y;
+        const run = (t) => [-1, 0, 1].map((k) => (c.nx ? { x: wallX, y: t + k } : { x: t + k, y: wallY }));
+        const mid = along[Math.floor(along.length / 2)];
+        const t = [...along].sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid)).find((v) => run(v).every((p) => !columnAt.has(`${p.x},${p.y}`))) ?? mid;
+        const cells = run(t);
+        cells.forEach((p) => { grid[p.y][p.x] = CELL.DOOR; });
+        windows.splice(0, windows.length, ...windows.filter((w) => !cells.some((p) => p.x === w.x && p.y === w.y)));
+        dock = { cells, spawn: { x: cells[1].x - c.nx, y: cells[1].y - c.ny }, dx: c.nx, dy: c.ny, room, truck: { x: c.x + c.w / 2, y: c.y + c.h / 2 } };
+      }
     }
 
     // Open seating: back-to-back desk pods, only as many as needed.
@@ -395,6 +465,8 @@ class BSPNode {
       const desk = { x: p.x + 2, y: deskRow, w: 2, h: 1 };
       fillDesk(desk);
       addWs({ x: p.x + 2, y: p.down ? deskRow + 1 : deskRow - 1 }, desk, room, 'office');
+      addDecor('plant', p.x + 1, deskRow, 1, 1);
+      addDecor('shelf', p.x + 4, deskRow, 1, 1);
     });
 
     // A room sized to the leaf's exterior-attached corner, with its door away from any exterior wall.
@@ -452,7 +524,7 @@ class BSPNode {
       const sw = Math.min(5, w - 2);
       addDecor('sofa', x + 1, y + 1, sw, 1);
       if (w >= 11) addDecor('sofa', x + w - 1 - sw, y + 1, sw, 1);
-      if (h >= 8) addDecor('sofa', x + 1, y + h - 2, sw, 1);
+      if (h >= 8) addDecor('sofa', x + 1, y + h - 2, sw, 1, undefined, { back: 'bottom' });
       addDecor('plant', x, y + h - 1, 1, 1);
       addDecor('plant', x + w - 1, y + h - 1, 1, 1);
       const tables = h >= 8 && w >= 6 ? tableGrid(x + 1, y + 3, w - 2, h - 5, { r: 1, n: 4, cr: 1.6, step: 5, round: 0.6 }) : 0;
@@ -473,6 +545,10 @@ class BSPNode {
         addDecor('table', tx, ty, tw, 2);
         for (let i = 0; i < tw; i++) { addDecor('chair', tx + i, ty - 1, 1, 1); addDecor('chair', tx + i, ty + 2, 1, 1); }
       }
+      const wallY = room.top ? room.y + room.h - 1 : room.y;
+      const len = Math.min(cap === 10 ? 5 : 3, iw);
+      addWall('tv', room.top ? 'bottom' : 'top', room.x + 1 + Math.floor((iw - len) / 2), wallY, len);
+      if (cap === 10) addWall('board', 'left', room.x, room.y + 2, 3);
     };
     const meetingRoom = (x, y, w, h, down, cap) => {
       const room = newRoom('meeting', x, y, w, h, `MEETING (${cap})`);
@@ -514,6 +590,25 @@ class BSPNode {
     };
 
     // Rooms from ROOM_DEFS: walled, one door, reserved workstations along the far wall, fixtures that keep a walkway open.
+    // Restrooms: stalls in the far corner, urinals and sinks beside them. dir points from the far wall toward the door.
+    const furnishRestroom = (room, far, rowY) => {
+      const iw = room.w - 2;
+      const dir = room.top ? -1 : 1;
+      const stalls = Math.max(2, Math.min(4, Math.floor((iw - 1) / 2)));
+      for (let i = 0; i < stalls; i++) addDecor('stall', room.x + 1 + i, room.top ? far - 1 : far, 1, 2, undefined, { dir });
+      for (let i = stalls + 1; i < iw; i += 2) addDecor('urinal', room.x + 1 + i, far, 1, 1, undefined, { dir });
+      for (let i = stalls; i < iw; i += 2) addDecor('sink', room.x + 1 + i, rowY(1), 1, 1);
+    };
+    // Huddle rooms: a TV on the far wall, a coffee table and a couch facing it with its back to the door.
+    const furnishHuddle = (room, far, rowY) => {
+      const iw = room.w - 2;
+      const len = Math.min(3, iw);
+      addWall('tv', room.top ? 'bottom' : 'top', room.x + 1 + Math.floor((iw - len) / 2), room.top ? room.y + room.h - 1 : room.y, len);
+      addDecor('table', room.x + 1 + Math.floor((iw - 2) / 2), rowY(1), 2, 1);
+      const sw = Math.min(4, iw);
+      addDecor('sofa', room.x + 1 + Math.floor((iw - sw) / 2), rowY(2), sw, 1, undefined, { back: room.top ? 'top' : 'bottom' });
+      addDecor('plant', room.x + 1, far, 1, 1);
+    };
     const defRoom = (type, x, y, w, h, down, doorAt) => {
       const def = ROOM_DEFS[type];
       const room = newRoom(type, x, y, w, h, def.label);
@@ -531,8 +626,12 @@ class BSPNode {
         fillDesk(desk);
         addWs({ x: desk.x, y: rowY(1) }, desk, room, type);
       }
-      if (iw - n * 3 > 0) addDecor(def.fixture, x + 1 + n * 3, far, iw - n * 3, 1, def.fx);
-      if (h >= 6) for (let o = 0; o < iw; o += 3) addDecor(def.fixture, x + 1 + o, rowY(2), Math.min(2, iw - o), 1, def.fx);
+      if (type === 'restroom') furnishRestroom(room, far, rowY);
+      else if (type === 'huddle') furnishHuddle(room, far, rowY);
+      else {
+        if (iw - n * 3 > 0) addDecor(def.fixture, x + 1 + n * 3, far, iw - n * 3, 1, def.fx);
+        if (h >= 6) for (let o = 0; o < iw; o += 3) addDecor(def.fixture, x + 1 + o, rowY(2), Math.min(2, iw - o), 1, def.fx);
+      }
       return room;
     };
     const specialSpecs = Object.entries(specialWant).flatMap(([type, n]) => Array.from({ length: n }, () => ({ type, w: SPECIAL_ROOMS[type].w, h: SPECIAL_ROOMS[type].h })))
@@ -560,7 +659,8 @@ class BSPNode {
         const ih = room.h - 2;
         const farRow = room.top ? room.y + room.h - 2 : room.y + 1;
         const sw = Math.min(iw - 2, 5);
-        addDecor('sofa', room.x + 1 + Math.floor((iw - sw) / 2), farRow, sw, 1);
+        addDecor('sofa', room.x + 1 + Math.floor((iw - sw) / 2), farRow, sw, 1, undefined, { back: room.top ? 'bottom' : 'top' });
+        addWall('tv', room.top ? 'bottom' : 'top', room.x + 1 + Math.floor((iw - Math.min(3, iw)) / 2), room.top ? room.y + room.h - 1 : room.y, Math.min(3, iw));
         const tables = room.h >= 8 && iw >= 5 ? tableGrid(room.x + 1, room.y + 2, iw, room.h - 4, { r: 1, n: 4, cr: 1.6, step: 5, round: 0.6 }) : 0;
         if (!tables && iw >= 6 && ih >= 5) addDecor('table', room.x + 1 + Math.floor((iw - 2) / 2), room.y + 1 + Math.floor((ih - 2) / 2), 2, 2);
       } else {
@@ -755,6 +855,62 @@ class BSPNode {
       }
       return true;
     };
+    // ---------- Elevators ----------
+    // Elevator and stair pads claim free floor only (never a pathway or a room): free cells beside a pathway.
+    const gap = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+    const pickTop = (list) => list[Math.floor(rng() * Math.max(1, Math.ceil(list.length * 0.25)))];
+    const pads = [];
+    {
+      const padSpots = (w, h) => {
+        const out = [];
+        for (let y = 1; y + h <= height - 1; y++) {
+          for (let x = 1; x + w <= width - 1; x++) {
+            let spawn = null;
+            let ok = true;
+            for (let j = 0; ok && j < h; j++) {
+              for (let i = 0; ok && i < w; i++) {
+                ok = freeAt(x + i, y + j);
+                if (ok && !spawn && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => pathType[y + j + dy]?.[x + i + dx] > 0 && hallAt(x + i + dx, y + j + dy))) spawn = { x: x + i, y: y + j };
+              }
+            }
+            if (ok && spawn) out.push({ x, y, w, h, spawn });
+          }
+        }
+        return out;
+      };
+      // near = true picks the closest spot that is still clear of the avoided points, instead of the farthest.
+      const findPad = (kind, avoid, near = false) => {
+        for (const [w, h] of [[2, 2], [2, 1], [1, 2], [1, 1]]) {
+          const all = padSpots(w, h).map((p) => ({ ...p, g: Math.min(...avoid.map((a) => gap(p, a))) }));
+          for (const minGap of near ? [4, 2, 0] : [14, 8, 4, 0]) {
+            const spots = all.filter((p) => p.g >= minGap).sort((a, b) => (near ? a.g - b.g : b.g - a.g));
+            if (!spots.length) continue;
+            const p = { kind, ...pickTop(spots) };
+            mark(p.x, p.y, p.w, p.h);
+            return p;
+          }
+        }
+        return null;
+      };
+      if (upper || tall) {
+        // The ground floor's cargo elevator almost always sits inside the dock room, in the corner furthest from its doors.
+        const inDock = () => {
+          const r = dock?.room;
+          if (!r || rng() > 0.92) return null;
+          const doorCells = [r.door, dock.spawn];
+          const corners = [[r.x + 1, r.y + 1], [r.x + r.w - 3, r.y + 1], [r.x + 1, r.y + r.h - 3], [r.x + r.w - 3, r.y + r.h - 3]]
+            .filter(([x, y]) => [0, 1].every((j) => [0, 1].every((i) => grid[y + j][x + i] === CELL.ROOM)));
+          const score = ([x, y]) => Math.min(...doorCells.map((d) => gap({ x: x + 0.5, y: y + 0.5 }, d)));
+          const best = corners.sort((a, b) => score(b) - score(a))[0];
+          return best ? { kind: 'cargoElevator', x: best[0], y: best[1], w: 2, h: 2, spawn: { x: best[0], y: best[1] } } : null;
+        };
+        const pub = findPad('publicElevator', [entrance], true);
+        const cargo = inDock() || findPad('cargoElevator', [entrance]);
+        const service = findPad('serviceElevator', [entrance, cargo?.spawn].filter(Boolean));
+        const stairs = findPad('stairs', [entrance, cargo?.spawn, service?.spawn].filter(Boolean));
+        pads.push(...[pub, cargo, service, stairs].filter(Boolean));
+      }
+    }
     const fillCount = {};
     // Big floors get proportionally more restrooms, huddles, storage and lounges so leftover space is put to use.
     const fillScale = Math.max(1, Math.round(seats / 40));
@@ -810,96 +966,16 @@ class BSPNode {
     const specialMissing = Object.entries(specialWant).reduce((a, [t, n]) => (
       a + Math.max(0, n - count(t)) + Math.max(0, n * SPECIAL_ROOMS[t].seats - workstations.filter((w) => w.kind === t).length)), 0);
 
-    // Extra spawn points. Ground floors get a loading dock in an exterior wall; upper floors get a public elevator (at the lobby),
-    // a service elevator and stairs. Pads are markers on hall cells, so they never block movement.
-    const reach = (x, y) => seen.has(y * width + x);
-    const gap = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-    const pickTop = (list) => list[Math.floor(rng() * Math.max(1, Math.ceil(list.length * 0.25)))];
-    let dock = null;
-    const pads = [];
-    if (!upper) {
-      const cands = [];
-      for (const key of extWalls) {
-        const [x, y] = key.split(',').map(Number);
-        for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
-          const spawn = { x: x - dx, y: y - dy };
-          if (!outAt(x + dx, y + dy) || grid[spawn.y]?.[spawn.x] !== CELL.HALL || !reach(spawn.x, spawn.y)) continue;
-          const cells = [-1, 0, 1].map((k) => ({ x: x + (dy !== 0 ? k : 0), y: y + (dx !== 0 ? k : 0) }));
-          if (!cells.every((c) => grid[c.y]?.[c.x] === CELL.WALL && outAt(c.x + dx, c.y + dy) && grid[c.y - dy]?.[c.x - dx] === CELL.HALL)) continue;
-          const d = gap(spawn, entrance);
-          if (d >= 18) cands.push({ cells, spawn, dx, dy, d });
-        }
-      }
-      cands.sort((a, b) => b.d - a.d);
-      dock = cands.length ? pickTop(cands) : null;
-      if (dock) {
-        dock.cells.forEach((c) => { grid[c.y][c.x] = CELL.DOOR; });
-        windows.splice(0, windows.length, ...windows.filter((w) => !dock.cells.some((c) => c.x === w.x && c.y === w.y)));
-      }
-    } else {
-      const used = new Set();
-      const claim = (p) => { for (let j = 0; j < p.h; j++) for (let i = 0; i < p.w; i++) used.add((p.y + j) * width + p.x + i); };
-      const open = (x, y) => grid[y]?.[x] === CELL.HALL && reach(x, y) && !used.has(y * width + x);
-      const findPad = (kind, avoid) => {
-        for (const [w, h] of [[2, 2], [2, 1], [1, 2], [1, 1]]) {
-          for (const minGap of [14, 8, 4, 0]) {
-            const spots = [];
-            for (let y = 1; y < height - 1; y++) {
-              for (let x = 1; x < width - 1; x++) {
-                let ok = true;
-                for (let j = 0; ok && j < h; j++) for (let i = 0; ok && i < w; i++) ok = open(x + i, y + j);
-                const g = ok ? Math.min(...avoid.map((a) => gap({ x, y }, a))) : -1;
-                if (ok && g >= minGap) spots.push({ x, y, w, h, g });
-              }
-            }
-            if (!spots.length) continue;
-            spots.sort((a, b) => b.g - a.g);
-            const p = { kind, ...pickTop(spots) };
-            p.spawn = { x: p.x, y: p.y };
-            claim(p);
-            return p;
-          }
-        }
-        return null;
-      };
-      const wide = [-1, 0, 1].every((k) => grid[entrance.y]?.[entrance.x + k] === CELL.HALL);
-      const pub = wide ? { kind: 'publicElevator', x: entrance.x - 1, y: entrance.y, w: 3, h: 1 } : { kind: 'publicElevator', x: entrance.x, y: entrance.y, w: 1, h: 1 };
-      pub.spawn = { x: entrance.x, y: entrance.y };
-      claim(pub);
-      const service = findPad('serviceElevator', [entrance]);
-      const stairs = findPad('stairs', [entrance, service?.spawn].filter(Boolean));
-      pads.push(pub, ...[service, stairs].filter(Boolean));
-    }
     const spawns = {
       entrance,
       dock: dock ? dock.spawn : null,
+      publicElevator: pads.find((p) => p.kind === 'publicElevator')?.spawn || null,
+      cargoElevator: pads.find((p) => p.kind === 'cargoElevator')?.spawn || null,
       serviceElevator: pads.find((p) => p.kind === 'serviceElevator')?.spawn || null,
       stairs: pads.find((p) => p.kind === 'stairs')?.spawn || null
     };
 
-    // Join each Mover spawn to the pathway network with a secondary pathway, so Movers can reach it on pathways alone.
-    for (const p of [spawns.dock, spawns.serviceElevator, spawns.stairs]) {
-      if (!p || pathType[p.y][p.x]) continue;
-      const prev = new Map([[p.y * width + p.x, -1]]);
-      const queue = [[p.x, p.y]];
-      for (let i = 0; i < queue.length; i++) {
-        const [x, y] = queue[i];
-        if (pathType[y][x]) {
-          for (let k = y * width + x; k !== -1; k = prev.get(k)) {
-            const cx = k % width;
-            const cy = Math.floor(k / width);
-            if (hallAt(cx, cy) && !pathType[cy][cx]) pathType[cy][cx] = 2;
-          }
-          break;
-        }
-        for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
-          const k = ny * width + nx;
-          if (hallAt(nx, ny) && !prev.has(k)) { prev.set(k, y * width + x); queue.push([nx, ny]); }
-        }
-      }
-    }
-
-    const layout = { grid, rooms, workstations, doors, decor, windows, extraLabels, entranceCells, entrance, dock, pads, spawns, width, height, cellSize, extWalls, shellP: shell.P, shellQ: shell.Q, pathType, curvedCells, plain, upper, missing: missing + specialMissing + unreachable + doorsCut, emptyFrac };
+    const layout = { grid, rooms, workstations, doors, decor, windows, extraLabels, entranceCells, entrance, dock, pads, spawns, columns, width, height, cellSize, extWalls, shellP: shell.P, shellQ: shell.Q, pathType, curvedCells, plain, upper, missing: missing + specialMissing + unreachable + doorsCut, emptyFrac };
     layout.elements = BSPNode.toSVG(layout);
     return layout;
   }
@@ -1050,9 +1126,9 @@ class BSPNode {
   }
 
   // SVG elements: floors, thin walls (one path), windows, doors, furniture and room labels.
-  static toSVG({ grid, rooms, doors, decor, windows, extraLabels = [], entranceCells, entrance, dock = null, pads = [], width, height, cellSize: s, extWalls, shellP, shellQ, pathType, curvedCells, upper }) {
+  static toSVG({ grid, rooms, doors, decor, windows, extraLabels = [], entranceCells, entrance, dock = null, pads = [], columns = [], width, height, cellSize: s, extWalls, shellP, shellQ, pathType, curvedCells, upper }) {
     const out = [];
-    out.push(svgPoly(shellQ.map(([x, y]) => [x * s, y * s]), 'hall', '#f1f5f9'));
+    out.push(svgPoly(shellP.map(([x, y]) => [x * s, y * s]), 'hall', '#f1f5f9'));
     // Walled rooms are filled only up to the wall centreline (inset); open areas fill their full box.
     const roomPath = (r, inset) => {
       const [a, b, c, e] = [0, 1, 2, 3].map((i) => (r.round?.flags[i] ? r.round.r - inset : 0));
@@ -1160,6 +1236,18 @@ class BSPNode {
     shellPath.setAttribute('d', `M${shellP.map(([x, y]) => `${x * s} ${y * s}`).join('L')}Z`);
     out.push(shellPath);
 
+    // Structural columns: square piers set in the wall, standing a little proud of its inner face.
+    for (const c of columns) {
+      const cx = (c.x + 0.5) * s;
+      const cy = (c.y + 0.5) * s;
+      const [tx, ty] = [-c.ny, c.nx];
+      const at = (n, t) => `${cx + c.nx * n + tx * t},${cy + c.ny * n + ty * t}`;
+      const pier = svgPoly([], 'column', '#475569');
+      pier.setAttribute('points', [at(-5, -5), at(-5, 5), at(2, 5), at(2, -5)].join(' '));
+      pier.setAttribute('stroke', '#1e293b');
+      pier.setAttribute('stroke-width', 0.6);
+      out.push(pier);
+    }
     for (const w of windows) {
       const horizontal = w.h;
       out.push(horizontal
@@ -1177,7 +1265,7 @@ class BSPNode {
           : svgPoly([[(c.x + 0.5) * s - 2, c.y * s], [(c.x + 0.5) * s + 2, c.y * s], [(c.x + 0.5) * s + 2, (c.y + 1) * s], [(c.x + 0.5) * s - 2, (c.y + 1) * s]], 'dock', '#ea580c'));
       }
     }
-    const PAD_STYLE = { publicElevator: ['ELEVATOR', 'pubelev', '#0ea5e9'], serviceElevator: ['SERVICE ELEV.', 'svcelev', '#14b8a6'], stairs: ['STAIRS', 'stairs', '#8b5cf6'] };
+    const PAD_STYLE = { publicElevator: ['ELEVATOR', 'pubelev', '#0ea5e9'], cargoElevator: ['CARGO ELEV.', 'cargoelev', '#b45309'], serviceElevator: ['SERVICE ELEV.', 'svcelev', '#14b8a6'], stairs: ['STAIRS', 'stairs', '#8b5cf6'] };
     for (const p of pads) out.push(svgPoly(rectPoints(p.x + 0.1, p.y + 0.1, p.w - 0.2, p.h - 0.2, s), `portal ${PAD_STYLE[p.kind][1]}`, PAD_STYLE[p.kind][2]));
     for (const dr of doors) {
       const horizontalWall = grid[dr.y][dr.x - 1] === CELL.WALL || grid[dr.y][dr.x + 1] === CELL.WALL;
@@ -1186,7 +1274,123 @@ class BSPNode {
         : svgPoly([[(dr.x + 0.5) * s - 1.5, dr.y * s], [(dr.x + 0.5) * s + 1.5, dr.y * s], [(dr.x + 0.5) * s + 1.5, (dr.y + 1) * s], [(dr.x + 0.5) * s - 1.5, (dr.y + 1) * s]], 'door', '#f59e0b'));
     }
 
+    // Wireframe detail drawn over the plain furniture fills (one path per style), so rooms read as what they are.
+    const lines = [];
+    const dark = [];
+    const light = [];
+    const P = (n) => +(n * s).toFixed(1);
+    const rect = (x, y, w, h) => `M${P(x)} ${P(y)}h${P(w)}v${P(h)}h${-P(w)}z`;
+    const circ = (cx, cy, r) => `M${P(cx - r)} ${P(cy)}a${P(r)} ${P(r)} 0 1 0 ${P(2 * r)} 0a${P(r)} ${P(r)} 0 1 0 ${-P(2 * r)} 0z`;
+    const seg = (x1, y1, x2, y2) => `M${P(x1)} ${P(y1)}L${P(x2)} ${P(y2)}`;
+    const detail = (f) => {
+      const { x, y, w, h } = f;
+      const far = f.dir > 0 ? y : y + h; // stalls and urinals: the wall end
+      const inward = f.dir > 0 ? 1 : -1;
+      switch (f.type) {
+        case 'sofa': {
+          const backTop = f.back !== 'bottom';
+          const by = backTop ? y + 0.38 : y + h - 0.38;
+          lines.push(rect(x + 0.12, y + 0.12, w - 0.24, h - 0.24), seg(x + 0.12, by, x + w - 0.12, by));
+          const n = Math.max(1, Math.round(w / 1.5));
+          for (let k = 1; k < n; k++) lines.push(seg(x + (w * k) / n, backTop ? by : y + 0.12, x + (w * k) / n, backTop ? y + h - 0.12 : by));
+          break;
+        }
+        case 'shelf':
+          lines.push(rect(x + 0.1, y + 0.12, w - 0.2, h - 0.24), seg(x + 0.1, y + h / 2, x + w - 0.1, y + h / 2));
+          for (let k = 1; k < w; k++) lines.push(seg(x + k, y + 0.12, x + k, y + h - 0.12));
+          break;
+        case 'machine':
+          for (let k = 0; k < w; k += 2) {
+            const uw = Math.min(2, w - k);
+            lines.push(rect(x + k + 0.12, y + 0.14, uw - 0.24, h - 0.28), seg(x + k + 0.25, y + 0.68, x + k + uw - 0.25, y + 0.68));
+            dark.push(rect(x + k + 0.22, y + 0.22, 0.3, 0.18));
+          }
+          break;
+        case 'rack':
+          for (let k = 0; k < w; k++) {
+            lines.push(rect(x + k + 0.12, y + 0.1, 0.76, h - 0.2));
+            for (const t of [0.3, 0.5, 0.7]) { lines.push(seg(x + k + 0.2, y + t, x + k + 0.8, y + t)); dark.push(circ(x + k + 0.27, y + t - 0.1, 0.045)); }
+          }
+          break;
+        case 'safe':
+          for (let k = 0; k < w; k++) lines.push(rect(x + k + 0.1, y + 0.1, 0.8, h - 0.2), circ(x + k + 0.5, y + 0.5, 0.26), circ(x + k + 0.5, y + 0.5, 0.1), seg(x + k + 0.5, y + 0.24, x + k + 0.5, y + 0.1));
+          break;
+        case 'monitor':
+          for (let k = 0; k < w; k++) {
+            dark.push(rect(x + k + 0.15, y + 0.12, 0.7, 0.5));
+            lines.push(seg(x + k + 0.5, y + 0.62, x + k + 0.5, y + 0.84), seg(x + k + 0.3, y + 0.84, x + k + 0.7, y + 0.84));
+          }
+          break;
+        case 'bed':
+          for (let k = 0; k < w; k += 2) {
+            const uw = Math.min(2, w - k);
+            lines.push(rect(x + k + 0.12, y + 0.14, uw - 0.24, h - 0.28), rect(x + k + 0.2, y + 0.27, 0.45, h - 0.54), seg(x + k + 0.9, y + 0.14, x + k + 0.9, y + h - 0.14));
+          }
+          break;
+        case 'steel':
+          for (let k = 0; k < w; k++) lines.push(rect(x + k + 0.12, y + 0.12, 0.76, h - 0.24), seg(x + k + 0.25, y + 0.8, x + k + 0.6, y + 0.25), seg(x + k + 0.45, y + 0.85, x + k + 0.75, y + 0.45));
+          break;
+        case 'bench':
+          lines.push(rect(x + 0.1, y + 0.14, w - 0.2, h - 0.28));
+          for (let k = 0; k < w; k++) lines.push(k % 2 ? rect(x + k + 0.3, y + 0.35, 0.4, 0.3) : circ(x + k + 0.5, y + 0.5, 0.18));
+          break;
+        case 'console':
+          lines.push(rect(x + 0.1, y + 0.1, w - 0.2, h - 0.2));
+          for (let k = 0; k < w; k++) { dark.push(rect(x + k + 0.18, y + 0.18, 0.64, 0.28)); lines.push(circ(x + k + 0.32, y + 0.72, 0.07), circ(x + k + 0.68, y + 0.72, 0.07)); }
+          break;
+        case 'camera':
+          for (let k = 0; k + 1 <= w; k += 2) {
+            const cx = x + k + 1;
+            lines.push(circ(cx, y + 0.42, 0.26), rect(cx + 0.2, y + 0.3, 0.32, 0.24), seg(cx, y + 0.68, cx - 0.32, y + h - 0.06), seg(cx, y + 0.68, cx + 0.32, y + h - 0.06));
+          }
+          break;
+        case 'pew':
+          lines.push(rect(x + 0.1, y + 0.14, w - 0.2, h - 0.28), seg(x + 0.1, y + 0.36, x + w - 0.1, y + 0.36));
+          break;
+        case 'pingpong':
+          for (let k = 0; k < w; k += 2) {
+            const uw = Math.min(2, w - k);
+            lines.push(rect(x + k + 0.1, y + 0.15, uw - 0.2, h - 0.3), seg(x + k + uw / 2, y + 0.15, x + k + uw / 2, y + h - 0.15));
+            light.push(circ(x + k + 0.35, y + 0.5, 0.07));
+          }
+          break;
+        case 'counter':
+          lines.push(rect(x + 0.1, y + 0.18, w - 0.2, h - 0.36));
+          dark.push(rect(x + 0.35, y + 0.28, 0.5, 0.3));
+          for (let k = 2; k < w - 1; k += 2) lines.push(circ(x + k + 0.5, y + 0.5, 0.13));
+          break;
+        case 'stall':
+          lines.push(rect(x + 0.08, y + 0.05, w - 0.16, h - 0.1), rect(x + 0.2, far + (inward > 0 ? 0.12 : -0.38), w - 0.4, 0.26), circ(x + w / 2, far + inward * 0.78, 0.27), seg(x + 0.08, far + inward * (h - 0.08), x + w * 0.45, far + inward * (h - 0.08)));
+          break;
+        case 'urinal':
+          lines.push(rect(x + 0.25, far + (inward > 0 ? 0.08 : -0.58), 0.5, 0.5));
+          dark.push(circ(x + 0.5, far + inward * 0.33, 0.06));
+          break;
+        case 'sink':
+          lines.push(rect(x + 0.1, y + 0.15, w - 0.2, h - 0.3), circ(x + 0.5, y + 0.5, 0.26));
+          dark.push(circ(x + 0.5, y + 0.5, 0.05));
+          break;
+        default:
+      }
+    };
+    // Wall-mounted TVs (dark) and whiteboards (white), thin slabs on the inner face of the wall cell.
+    const wallItem = (f) => {
+      const t = 0.26;
+      const along = f.w - 0.2;
+      const cx = f.x + 0.5;
+      const cy = f.y + 0.5;
+      const r = f.side === 'bottom' ? rect(f.x + 0.1, cy - 0.1 - t, along, t)
+        : f.side === 'top' ? rect(f.x + 0.1, cy + 0.1, along, t)
+          : f.side === 'left' ? rect(cx + 0.1, f.y + 0.1, t, along)
+            : rect(cx - 0.1 - t, f.y + 0.1, t, along);
+      (f.type === 'tv' ? dark : light).push(r);
+    };
+
     for (const f of decor) {
+      if (f.type === 'tv' || f.type === 'board') {
+        wallItem(f);
+        continue;
+      }
       if (f.type === 'rtable' || f.type === 'rchair') {
         const c = document.createElementNS(SVG_NS, 'circle');
         c.setAttribute('class', f.type === 'rtable' ? 'decor table' : 'decor chair');
@@ -1205,7 +1409,28 @@ class BSPNode {
         const poly = svgPoly(rectPoints(f.x + 0.08, f.y + 0.08, f.w - 0.16, f.h - 0.16, s), `decor ${f.type}${f.color ? ' fx' : ''}`, '#cbd5e1');
         if (f.color) poly.style.setProperty('--fx', f.color);
         out.push(poly);
+        detail(f);
       }
+    }
+    for (const [cls, list] of [['decor-light', light], ['decor-lines', lines], ['decor-dark', dark]]) {
+      if (!list.length) continue;
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('class', cls);
+      path.setAttribute('d', list.join(''));
+      out.push(path);
+    }
+
+    if (dock?.truck) {
+      const truck = document.createElementNS(SVG_NS, 'text');
+      truck.setAttribute('class', 'truck');
+      truck.setAttribute('x', dock.truck.x * s);
+      truck.setAttribute('y', dock.truck.y * s);
+      truck.setAttribute('font-size', 17);
+      truck.setAttribute('text-anchor', 'middle');
+      truck.setAttribute('dominant-baseline', 'central');
+      truck.setAttribute('pointer-events', 'none');
+      truck.textContent = (typeof Save !== 'undefined' && Save.active?.vehicle) || '🚚';
+      out.push(truck);
     }
 
     const label = (text, x, y, type) => {
@@ -1224,7 +1449,8 @@ class BSPNode {
     }
     for (const e of extraLabels) label(e.text, e.x * s, e.y * s, 'phone');
     if (!upper) label('ENTRANCE', (entrance.x + 0.5) * s, (entrance.y - 0.3) * s, 'entrance');
-    if (dock) label('LOADING DOCK', (dock.spawn.x + 0.5 - dock.dx * 3.5) * s, (dock.spawn.y + 0.5 - dock.dy * 1.5 + 0.2) * s, 'dock');
+    if (dock?.truck) label('LOADING DOCK', dock.truck.x * s, (dock.truck.y + 2.1) * s, 'dock');
+    else if (dock) label('LOADING DOCK', (dock.spawn.x + 0.5 - dock.dx * 3.5) * s, (dock.spawn.y + 0.5 - dock.dy * 1.5 + 0.2) * s, 'dock');
     for (const p of pads) label(PAD_STYLE[p.kind][0], (p.x + p.w / 2) * s, (p.y - 0.3) * s, PAD_STYLE[p.kind][1]);
     return out;
   }

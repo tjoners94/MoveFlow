@@ -427,10 +427,12 @@ const FEATURE_LEGEND = [
   ['feature:entrance', 'Entrance', '#22c55e', ['.entrance', '.room-label[data-room="entrance"]'], 'Features'],
   ['feature:dock', 'Loading Dock', '#ea580c', ['.dock', '.room-label[data-room="dock"]'], 'Features'],
   ['feature:pubelev', 'Public Elevator', '#0ea5e9', ['.portal.pubelev', '.room-label[data-room="pubelev"]'], 'Features'],
+  ['feature:cargoelev', 'Cargo Elevator', '#b45309', ['.portal.cargoelev', '.room-label[data-room="cargoelev"]'], 'Features'],
   ['feature:svcelev', 'Service Elevator', '#14b8a6', ['.portal.svcelev', '.room-label[data-room="svcelev"]'], 'Features'],
   ['feature:stairs', 'Stairs', '#8b5cf6', ['.portal.stairs', '.room-label[data-room="stairs"]'], 'Features'],
   ['feature:door', 'Door', '#f59e0b', ['.door'], 'Features'],
   ['feature:window', 'Window', '#7dd3fc', ['.window'], 'Features'],
+  ['feature:column', 'Structural Column', '#475569', ['.column'], 'Features'],
   ['layer:mgmt', 'Management Lines', '#6366f1', ['.mgmt-lines'], 'Features', true]
 ];
 const legendHidden = new Set();
@@ -548,7 +550,9 @@ document.addEventListener('keydown', (e) => {
 
 // Every floor lives in one SVG as a translated group; the viewer shows one group or all of them.
 function renderBoard() {
-  svg.replaceChildren();
+  svg.replaceChildren(Lighting.defs());
+  const tod = state.job?.timeOfDay;
+  Lighting.apply(svg, tod);
   for (const fl of state.floors) {
     fl.g = document.createElementNS(SVG_NS, 'g');
     fl.g.setAttribute('class', 'floor-g');
@@ -562,7 +566,8 @@ function renderBoard() {
     fl.chart = document.createElementNS(SVG_NS, 'g');
     fl.chart.setAttribute('class', 'chart-layer');
     fl.chart.setAttribute('pointer-events', 'none');
-    fl.g.append(fl.dyn, fl.links, fl.walkers, fl.chart);
+    fl.light = Lighting.build(fl, tod);
+    fl.g.append(fl.light, fl.dyn, fl.links, fl.walkers, fl.chart);
     svg.appendChild(fl.g);
   }
   overlay = document.createElementNS(SVG_NS, 'g');

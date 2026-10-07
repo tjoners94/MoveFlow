@@ -221,7 +221,9 @@ const WIKI = [
           { h: 'Corridors' },
           '{{circulation|Primary pathways}} are the main hallways. Secondary pathways branch off them to reach doors. Movers walk only on these. See [[movers]].',
           { h: 'Many floors, many buildings' },
-          'Bigger jobs spread across several floors and buildings, forming a {{campus}}. Upper floors have no front door, so they use elevators and stairs instead. Windows line the outer walls, which matters to people who like {{daylighting}}.'
+          'Bigger jobs spread across several floors and buildings, forming a {{campus}}. Upper floors have no front door, so they use elevators and stairs instead. Windows line the outer walls, which matters to people who like {{daylighting}}. Square structural columns are built into the exterior wall at a regular spacing, the same on every floor of a building.',
+          { h: 'Time of day' },
+          'Every job has a time of day (Morning, Noon, Evening or Night), shown in its briefing. It only changes the lighting: sunbeams through the windows by day, ceiling lights at night. It has no effect on gameplay.'
         ]
       },
       {
@@ -313,25 +315,31 @@ const WIKI = [
       {
         id: 'movers', title: 'Movers & Entrances',
         flavor: 'Hard hats, harder schedules, and an unwavering belief that the couch will fit.',
-        tldr: 'Movers appear at an entrance, walk only on pathways, fetch each object from the truck, place it and return.',
-        eli5: 'Movers are the helpers. They pick up a box, walk down the hallway, put it on the right desk, then go back for more.',
-        body: [
+        tldr: 'Movers come in at the loading dock (or the main entrance), ride lifts to upper floors, walk only on pathways, fetch each object from the truck, place it and return.',
+        eli5: 'Movers are the helpers. They pick up a box, take the elevator if the desk is upstairs, put it on the right desk, then go back to the truck for more.',
+        body: () => [
           { h: 'Where Movers start' },
           {
             table: [
               ['Entrance', 'Used when'],
-              ['Loading Dock', 'Ground floor. A {{loading dock}} at the back.'],
-              ['Service Elevator', 'Upper floors. A {{service elevator}} (or {{freight elevator}}) just for the crew.'],
-              ['Stairs', 'Upper floors when the No Elevators modifier is on.'],
-              ['Public Elevator', 'Where employees arrive on upper floors.']
+              ['Loading Dock', 'Ground floor, in some buildings (mostly multi-storey ones). A walled {{loading dock}} room with the company truck in the middle. Without one, Movers use the main entrance.'],
+              ['Cargo Elevator', 'Movers carrying an object ride it up. Most often built into the loading dock room.'],
+              ['Service Elevator', 'Movers ride it back down, empty-handed. A {{service elevator}} (or {{freight elevator}}).'],
+              ['Public Elevator', 'Employees use it to reach upper floors.'],
+              ['Stairs', 'Everyone climbs them instead when the No Elevators modifier is on.']
             ]
           },
+          { h: 'Elevators' },
+          'Each building runs its own cars on a timed schedule: they travel between floors, open their doors, and take whoever is waiting. A pawn counts as 1 unit and each object it carries adds its weight (plants 0.5, boxes and computers 1, furniture 2). Movers wait their turn at the pad.',
+          { table: [['Car', 'Capacity', 'Per floor'], ...Object.values(ELEVATORS).sort((a, b) => b.cap - a.cap).map((e) => [e.name, String(e.cap), `${e.floorSecs}s`])] },
           { h: 'How they work' },
           {
             ul: [
-              'Movers stay on primary and secondary pathways. Doors and rooms are open, and Open Seating is reached through its nearest path.',
+              'Movers stay on primary and secondary pathways. They may enter only the room they are delivering to, or the one they start in.',
+              'Pawns keep to the right-hand side of a pathway and keep their distance from each other, bunching loosely when they wait.',
               'A crew works each floor at once. Up to six Movers per floor, never more than there are objects, with Robo-Loader and vehicles adding more.',
               'Each object means a trip to the truck. That pickup takes 15 seconds, and a Rainstorm makes it 25% longer.',
+              'Employees arrive in a random order, not in desk order. If you planned in the evening or at night, day breaks before they arrive.',
               'Two Movers never work the same desk at once.',
               '{{throughput}} improves with the Speed upgrade and hires. See [[upgrades]] and [[hires]].'
             ]
