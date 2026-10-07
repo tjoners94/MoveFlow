@@ -92,10 +92,10 @@ const Tip = (() => {
 
 // ---------- Modals ----------
 const Modal = (() => {
-  function show({ title, content, wide = false, corner = null, scroll = false, onClose }) {
+  function show({ title, content, wide = false, cls = '', corner = null, scroll = false, onClose }) {
     const close = () => { overlay.remove(); Tip.hide(); onClose?.(); };
     const overlay = h('div', { class: 'modal-overlay', onclick: (e) => { if (e.target === overlay) close(); } },
-      h('div', { class: `modal${wide ? ' wide' : ''}` },
+      h('div', { class: `modal${wide ? ' wide' : ''}${cls ? ` ${cls}` : ''}` },
         h('button', { class: 'modal-close', 'aria-label': 'Close', onclick: close }, '✕'),
         corner,
         title ? h('h3', {}, title) : null,
@@ -228,7 +228,8 @@ const UI = (() => {
       h('h1', { class: 'title-hero glossy' }, 'Move Flow'),
       h('div', { class: 'start-actions' },
         h('button', { class: 'squircle yellow big', type: 'button', onclick: howItWorks }, 'How It Works'),
-        h('button', { class: 'squircle primary big', type: 'button', onclick: () => show('saves') }, 'Start')));
+        h('button', { class: 'squircle primary big', type: 'button', onclick: () => show('saves') }, 'Start')),
+      h('div', { class: 'start-credit' }, 'Created by TJS7'));
   }
 
   function howItWorks() {
@@ -243,7 +244,7 @@ const UI = (() => {
           step('✅', '2', 'Execute', 'Press Execute when everyone is seated. Movers deliver every object, then employees arrive and react. Meeting requirements and pleasing preferences earns stars, and finishing planning fast or beating the Satisfaction goal earns bonus rewards.'),
           step('💰', '3', 'Get Paid', 'Collect your reward, then spend your bank on upgrades and unlock new hires, clients and modifiers. Hires and upgrades counter the hazards modifiers add.')),
         h('div', { class: 'how-foot' },
-          h('a', { class: 'squircle action how-link', href: 'https://www.google.com', target: '_blank', rel: 'noopener noreferrer' }, 'Learn More')))
+          h('button', { class: 'squircle action how-link', type: 'button', onclick: () => Wiki.open() }, 'Learn More')))
     });
   }
 
