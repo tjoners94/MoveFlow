@@ -239,10 +239,10 @@ const WIKI = [
               '**View All (buildings):** stacks every building in an {{isometric projection}}. Press the second View All to flatten it overhead.',
               '**View All (floors):** shows every floor of one building side by side.',
               '**Analyze (chart button):** dims the plans and charts each floor: seat {{utilization}} for Open Seating and Offices, plus a pie of employees by department. Handy as a poor man\'s {{stacking plan}}.',
-              '**Activity Heatmap (flame button):** appears left of Analyze once the move is complete. Dims the plans and colors every floor by how much foot traffic it saw, from blue (light) to red (heavy).',
+              '**Activity Heatmap (flame button):** glows during Execute and Feedback and stays available afterwards. Dims the plans and colors every floor by how much foot traffic it sees, from blue (light) to red (heavy), building up live as the move runs.',
               '**Legend:** explains the colors and symbols on the map. Think of it as light {{wayfinding}}.',
               '**Pin (employee card):** docks the card beside the map so it stays put.',
-              '**Speed (during Execute):** cycles 1x, 2x, 4x and 8x.'
+              '**Speed (during Execute):** a slider from 1x up to 32x.'
             ]
           }
         ]

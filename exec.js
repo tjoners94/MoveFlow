@@ -18,7 +18,7 @@ const ELEVATORS = {
 };
 const LOAD_UNITS = { plant: 0.5, box: 1, computer: 1, furniture: 2 };
 const DELIVERY_ORDER = { furniture: 0, box: 1 }; // everything else (plants, computers) goes last
-const SIM_SPEEDS = [1, 2, 4, 8];
+const SIM_SPEEDS = [1, 2, 4, 8, 16, 32];
 const CARGO_LABELS = ['Light', 'Moderate', 'Heavy', 'Brutal'];
 const cargoLabel = (load = 0) => CARGO_LABELS[Math.min(3, Math.floor(load / 0.25))];
 
@@ -59,7 +59,7 @@ function setPhase(phase, detail = '') {
     btn.textContent = PHASES[phase][1] + (typeof detail === 'string' && detail ? ` ${detail}` : '');
     btn.disabled = phase === 'execute' || phase === 'feedback';
   }
-  const sp = document.getElementById('speed-btn');
+  const sp = document.getElementById('speed-ctl');
   if (sp) sp.hidden = phase === 'planning' || phase === 'done';
   if (typeof updateHeatmap === 'function') updateHeatmap();
 }
@@ -624,7 +624,9 @@ const Exec = (() => {
   // ----- Execute: Movers carry each object from the loading dock to its desk, by lift or stairs when it is upstairs -----
   function begin() {
     stop();
+    for (const fl of state.floors) fl.heat = new Float32Array(fl.layout.width * fl.layout.height);
     setPhase('execute');
+    setSpeed(SIM_SPEEDS.indexOf(speed));
     state.damage = 0;
     state.broken = 0;
     sim = {
@@ -635,8 +637,6 @@ const Exec = (() => {
     for (const fl of state.floors) {
       fl.live = new Set();
       fl.spots = {};
-      fl.heat = new Float32Array(fl.layout.width * fl.layout.height);
-      fl.heatDrawn = false;
       const tasks = [];
       for (const ws of state.workstations) {
         if (ws.floor !== fl.idx || ws.assignedEmployeeId === null) continue;
@@ -998,15 +998,17 @@ const Exec = (() => {
     celebration.hide();
   }
 
-  function cycleSpeed() {
-    speed = SIM_SPEEDS[(SIM_SPEEDS.indexOf(speed) + 1) % SIM_SPEEDS.length];
-    document.getElementById('speed-btn').textContent = `\u23e9 ${speed}\u00d7`;
+  function setSpeed(i) {
+    speed = SIM_SPEEDS[Math.max(0, Math.min(SIM_SPEEDS.length - 1, i))];
+    document.getElementById('speed-range').value = SIM_SPEEDS.indexOf(speed);
+    document.getElementById('speed-label').textContent = `\u23e9 ${speed}\u00d7`;
   }
+  const cycleSpeed = () => setSpeed((SIM_SPEEDS.indexOf(speed) + 1) % SIM_SPEEDS.length);
 
   function reset() {
     stop();
     setPhase('planning');
   }
 
-  return { begin, stop, reset, cycleSpeed, hideSummary: () => celebration.hide() };
+  return { begin, stop, reset, cycleSpeed, setSpeed, hideSummary: () => celebration.hide() };
 })();

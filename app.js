@@ -571,7 +571,6 @@ function renderBoard() {
     fl.heatG = document.createElementNS(SVG_NS, 'g');
     fl.heatG.setAttribute('class', 'heat-layer');
     fl.heatG.setAttribute('pointer-events', 'none');
-    fl.heatDrawn = false;
     fl.g.append(fl.light, fl.dyn, fl.links, fl.walkers, fl.heatG, fl.chart);
     svg.appendChild(fl.g);
   }
@@ -674,6 +673,7 @@ function showFocus(refit) {
   }
   updateFloorNav();
   updateCharts();
+  updateHeatmap();
 }
 
 // Re-fit whenever the board's size changes (window resize, or the employee card docking beside it).
@@ -735,7 +735,6 @@ function updateFloorNav() {
   const allBtn = nav.querySelector('.nav-allb');
   if (allBtn) {
     allBtn.classList.toggle('active', allB);
-    allBtn.querySelector('.nav-count').textContent = seated(() => true);
   }
   const row = nav.querySelector('.nav-floors');
   const floors = state.floors.filter((fl) => fl.b === focus.b).sort((p, q) => p.f - q.f);
@@ -749,9 +748,7 @@ function updateFloorNav() {
     row.append(btn);
   }
   if (floors.length > 1) {
-    const allF2 = navButton(`nav-allf wide${allF ? ' active' : ''}`, 'View All', 'View every floor of this building (overhead). With View All buildings on, switches the isometric view to overhead.', () => setViewMode(modeFrom(isAllBuildings(), !isAllFloors())));
-    allF2.querySelector('.nav-count').textContent = seated((fl) => fl.b === focus.b);
-    row.append(allF2);
+    row.append(navButton(`nav-allf wide${allF ? ' active' : ''}`, 'View All', 'View every floor of this building (overhead). With View All buildings on, switches the isometric view to overhead.', () => setViewMode(modeFrom(isAllBuildings(), !isAllFloors()))));
   }
   updateFloorLabels();
 }
@@ -1554,5 +1551,5 @@ Dev.action('Preview Score', () => {
 });
 
 document.getElementById('finish-btn').addEventListener('click', () => (state.phase === 'done' ? completeJob() : requestExecute()));
-document.getElementById('speed-btn').addEventListener('click', () => Exec.cycleSpeed());
+document.getElementById('speed-range').addEventListener('input', (e) => Exec.setSpeed(+e.target.value));
 newGame();

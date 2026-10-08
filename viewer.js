@@ -219,6 +219,7 @@ function drawHeatmaps() {
   const used = smooth.flatMap((g) => [...g].filter((v) => v > 0.01)).sort((a, b) => a - b);
   const max = Math.max(1e-6, used.length ? used[Math.floor((used.length - 1) * 0.97)] : 0);
   floors.forEach((fl, n) => {
+    if (fl.g.style.display === 'none') return;
     const W = fl.layout.width;
     const H = fl.layout.height;
     const grid = smooth[n];
@@ -239,13 +240,12 @@ function drawHeatmaps() {
       }
     }
     fl.heatG.replaceChildren(blur, cells);
-    fl.heatDrawn = true;
   });
 }
 
 function updateHeatmap() {
   const btn = document.getElementById('heat-btn');
-  const available = state.phase === 'done' && state.floors.some((fl) => fl.heat);
+  const available = state.phase !== 'planning' && state.floors.some((fl) => fl.heat);
   if (!available) state.heatmap = false;
   btn.hidden = !available;
   const on = !!state.heatmap;
@@ -253,8 +253,11 @@ function updateHeatmap() {
   btn.setAttribute('aria-pressed', String(on));
   svg.classList.toggle('heatmap', on);
   document.getElementById('heat-key').hidden = !on;
-  if (on && state.floors.some((fl) => fl.heat && !fl.heatDrawn)) drawHeatmaps();
+  if (on) drawHeatmaps();
 }
+
+// The heat builds up in view while the move is running.
+setInterval(() => { if (state.heatmap && (state.phase === 'execute' || state.phase === 'feedback')) drawHeatmaps(); }, 600);
 
 document.getElementById('heat-btn').addEventListener('click', () => {
   state.heatmap = !state.heatmap;

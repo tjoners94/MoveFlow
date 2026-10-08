@@ -205,6 +205,16 @@ body[data-phase="done"] #finish-btn { animation: resultsPulse 1.3s ease-in-out i
 .zoom-btn.heat-btn { font-size: 20px; }
 .zoom-btn.heat-btn[hidden] { display: none; }
 .zoom-btn.heat-btn.on { background: #ffedd5; border-color: #f97316; color: #9a3412; }
+body:is([data-phase="execute"], [data-phase="feedback"]) .zoom-btn.heat-btn:not(.on) { animation: heatGlow 1.6s ease-in-out infinite; }
+@keyframes heatGlow {
+  0%, 100% { box-shadow: var(--shadow-soft), 0 0 0 0 rgba(249, 115, 22, 0); border-color: var(--squircle-border); }
+  50% { box-shadow: var(--shadow-soft), 0 0 12px 3px rgba(249, 115, 22, .55); border-color: #fb923c; }
+}
+#speed-ctl { display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px; }
+#speed-ctl[hidden] { display: none; }
+#speed-label { min-width: 52px; font-weight: 800; }
+#speed-range { width: 110px; accent-color: #3b82f6; cursor: pointer; }
+.nav-btn small:empty { display: none; }
 .heat-layer { display: none; }
 #game-board.heatmap .heat-layer { display: inline; }
 #game-board.heatmap .floor-g > :not(.heat-layer) { opacity: .3; }
