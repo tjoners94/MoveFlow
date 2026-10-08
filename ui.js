@@ -9,7 +9,7 @@ const VEHICLES = ['🚚', '🚐', '🚙', '🚛', '🏎️', '🚜', '🚲', '�
 
 const roomList = (rooms) => Object.entries(rooms).map(([t, n]) => `${SPECIAL_ROOMS[t].name}${n > 1 ? ` x${n}` : ''}`).join(', ');
 const UNLOCK_CATEGORIES = [
-  { id: 'hires', icon: '👷', name: 'Specialty Hires', color: '#3b82f6', items: HIRES },
+  { id: 'hires', icon: '👷', name: 'Specialty Hires', color: '#3b82f6', intro: ['Unlocked here, hired per job.', 'Choose any of them on a job\u2019s briefing. Each costs a share of that job\u2019s reward, is paid from the payout, and is back for the next job.'], items: HIRES },
   { id: 'clients', icon: '🏢', name: 'Client Types', color: '#8b5cf6',
     items: Object.values(INDUSTRIES).map((c) => [c.icon, c.name, `Random contracts can come from this client (${roomList(c.rooms)}).`]) },
   { id: 'modifiers', icon: '🎲', name: 'Job Modifiers', color: '#f59e0b', intro: ['Optional modifiers on Random Jobs.', 'Each modifier affects total payout by +10% each.'],
@@ -242,7 +242,7 @@ const UI = (() => {
         h('div', { class: 'how-cols' },
           step('📋', '1', 'Plan', 'Read each employee\u2019s requirements and preferences, then drag them onto desks across the floor plan before time runs out.'),
           step('✅', '2', 'Execute', 'Press Execute when everyone is seated. Movers deliver every object, then employees arrive and react. Meeting requirements and pleasing preferences earns stars, and finishing planning fast or beating the Satisfaction goal earns bonus rewards.'),
-          step('💰', '3', 'Get Paid', 'Collect your reward, then spend your bank on upgrades and unlock new hires, clients and modifiers. Hires and upgrades counter the hazards modifiers add.')),
+          step('💰', '3', 'Get Paid', 'Collect your reward, then spend your bank on upgrades and unlock new hires, clients and modifiers. Hire specialists for a job to counter the hazards modifiers add.')),
         h('div', { class: 'how-foot' },
           h('button', { class: 'squircle action how-link', type: 'button', onclick: () => Wiki.open() }, 'Learn More')))
     });
@@ -460,11 +460,13 @@ const UI = (() => {
     const rows = CAMPAIGN.map((job, i) => {
       const done = d.completed.includes(job.id);
       const locked = i > 0 && !d.completed.includes(CAMPAIGN[i - 1].id);
+      const plan = planCampus(job, job.employees);
       return h('button', {
         class: `list-row${done ? ' done' : ''}${locked ? ' locked' : ''}`, 'data-fx': locked ? 'error' : 'click',
         onclick: () => { if (locked) return; close(); briefing(job); }
       }, h('span', { class: 'row-icon' }, locked ? '🔒' : job.icon),
-        h('span', { class: 'row-text' }, h('b', {}, job.name), h('small', {}, job.desc)),
+        h('span', { class: 'row-text' }, h('b', {}, job.name), h('small', {}, job.desc),
+          h('small', {}, `${job.employees} employees \u00b7 ${plan.sites.length === 1 ? '1 building' : `${plan.sites.length} buildings`}, ${plan.floors.length} ${plan.floors.length === 1 ? 'floor' : 'floors'}${job.modIds.length ? ` \u00b7 ${job.modIds.length} modifier${job.modIds.length === 1 ? '' : 's'}` : ''}`)),
         done ? h('span', {}, '✅') : null);
     });
     close = Modal.show({ title: 'Campaign Missions', content: h('div', { class: 'list' }, rows) });
@@ -503,6 +505,7 @@ const UI = (() => {
     let job = base;
     let assigned = [];
     let allOn = false;
+    let hires = info ? [...(base.hires || [])] : [];
     const tier = RANDOM_TIERS.find((t) => `r-${t.tier}` === base.id);
     const unlockedIds = () => MODIFIERS.filter((_, i) => Save.isUnlocked('modifiers', i)).map((m) => m.id);
     const rollMods = () => {
@@ -540,12 +543,37 @@ const UI = (() => {
       return h('div', { class: 'riders' },
         h('div', { class: 'riders-head' },
           h('div', { class: 'label' }, 'Job Modifiers'),
-          info || none ? null : (allOn
+          info || none || base.campaign ? null : (allOn
             ? h('button', { class: 'squircle mini', onclick: () => { allOn = false; render(); } }, 'Disable All')
             : h('button', { class: 'squircle danger mini', onclick: async () => { if (await confirmAll()) { allOn = true; render(); } } }, 'Enable All'))),
         mods.length ? h('div', { class: 'rider-row' }, chips) : h('small', { class: 'muted' }, none ? 'No modifiers unlocked yet.' : 'None on this job.'));
     };
     const sub = (text) => h('h4', { class: 'brief-h' }, text);
+    // Specialty Hires: bought per job from those unlocked, never the same one twice, paid from the payout when the job completes.
+    const hiresBox = () => {
+      const head = h('div', { class: 'riders-head' }, h('div', { class: 'label' }, 'Specialty Hires'));
+      if (info) {
+        return h('div', { class: 'riders' }, head, h('div', { class: 'rider-row' }, (job.hires || []).filter((i) => HIRES[i]).map((i) => {
+          const chip = h('span', { class: 'rider on static', tabindex: 0 }, `${HIRES[i][0]} ${HIRES[i][1]}`);
+          Tip.attach(chip, HIRES[i][2]);
+          return chip;
+        })));
+      }
+      const subtotal = jobRewards({ ...job, hires: [] }).subtotal;
+      const options = HIRES.map((x, i) => ({ x, i })).filter(({ i }) => Save.isUnlocked('hires', i));
+      return h('div', { class: 'riders' }, head,
+        options.length
+          ? h('div', { class: 'hire-grid' }, options.map(({ x, i }) => {
+            const on = hires.includes(i);
+            return h('button', {
+              type: 'button', class: `hire-card${on ? ' on' : ''}`, 'aria-pressed': String(on),
+              onclick: () => { hires = on ? hires.filter((k) => k !== i) : [...hires, i].sort((a, b) => a - b); render(); }
+            }, h('span', { class: 'hire-top' }, h('span', { class: 'hire-icon' }, x[0]), h('b', {}, x[1]), h('span', { class: 'hire-cost' }, on ? 'Hired' : money(hireCost(i, subtotal)))),
+            h('small', {}, x[2]));
+          }))
+          : h('small', { class: 'muted' }, 'No Specialty Hires unlocked yet. Complete Campaign missions to unlock them.'),
+        options.length ? h('small', { class: 'muted' }, 'Hired for this job only and paid from the payout when it is completed. Each one is available again next job.') : null);
+    };
     const line = (key, val) => h('p', { class: 'brief-line' }, h('span', { class: 'brief-key' }, key), val);
     const planBtn = (name, count, title) => h('span', { class: 'nav-btn static', title }, h('span', { class: 'nav-name' }, name), h('small', { class: 'nav-count' }, count));
     const client = () => {
@@ -577,7 +605,7 @@ const UI = (() => {
       const r = jobRewards(job);
       const goal = Math.round(Perks.satGoal(job) * 100);
       const signed = (n) => (n < 0 ? `-${money(-n)}` : `+${money(n)}`);
-      const row = (name, hint, amount, cls = '') => h('div', { class: `brief-reward ${cls}` }, h('span', {}, h('b', {}, name), h('small', {}, hint)), h('b', { class: 'good' }, amount));
+      const row = (name, hint, amount, cls = '') => h('div', { class: `brief-reward ${cls}` }, h('span', {}, h('b', {}, name), h('small', {}, hint)), h('b', { class: amount.startsWith('-') ? 'loss' : 'good' }, amount));
       return h('div', { class: 'brief-rewards' },
         sub('Rewards'),
         row('Completion', `Fixed: ${money(CFG.rewardPerEmployee)} per employee`, money(r.completion)),
@@ -587,6 +615,7 @@ const UI = (() => {
         job.timeLimit ? row('Bonus: Fast Planning', `Press Execute within ${Math.round(r.fastShare * 100)}% of the Time Limit`, signed(r.fastBonus)) : null,
         row('Bonus: Satisfaction', `Reach ${goal}% Satisfaction`, signed(r.satBonus)),
         r.factor > 1 ? row('All Modifiers ×2', 'Total payout doubled', signed(r.total() - r.total() / r.factor)) : null,
+        r.hires.map((x) => row(`${x.icon} ${x.name}`, 'Specialty Hire: paid from the payout', signed(-x.amount))),
         row('Total', 'Maximum, if every bonus is earned', money(r.total()), 'total'));
     };
     const instructions = () => {
@@ -601,7 +630,7 @@ const UI = (() => {
       ].filter(Boolean).map((text) => h('li', {}, text))));
     };
     const render = () => {
-      job = base.campaign || info ? base : { ...applyMods(base, allOn ? unlockedIds() : assigned), allMods: allOn };
+      job = info ? base : { ...applyMods(base, base.campaign ? base.modIds : allOn ? unlockedIds() : assigned, hires), hires: [...hires], allMods: allOn };
       holder.replaceChildren(...[
         job.desc ? h('p', {}, job.desc) : null,
         ...client(),
@@ -611,7 +640,8 @@ const UI = (() => {
           stat('Time Limit', job.timeLimit ? formatClock(job.timeLimit) : '∞'),
           stat('Cargo', cargoLabel(job.cargoLoad ?? 0.25)),
           stat('Time of Day', `${timeOf(job).icon} ${timeOf(job).name}`)),
-        base.campaign || (info && !activeMods().length) ? null : modifiersBox(),
+        base.campaign ? (activeMods().length ? modifiersBox() : null) : info && !activeMods().length ? null : modifiersBox(),
+        info && !(job.hires || []).length ? null : hiresBox(),
         rewards(),
         instructions(),
         h('div', { class: 'row sticky-row' }, info
@@ -907,6 +937,7 @@ const UI = (() => {
       sat: mkRow('Satisfaction Bonus', summary.satHit ? h('span', { class: 'good' }, `+${money(summary.satBonus)}`) : 'Missed'),
       doubled: summary.doubled ? mkRow('All Modifiers ×2', h('span', { class: 'good' }, `+${money(summary.doubled)}`)) : null,
       damage: summary.broken ? mkRow(`Breakages (${summary.broken})`, h('span', { class: 'loss' }, `-${money(summary.damage)}`)) : null,
+      hires: summary.hireCost ? mkRow(`Specialty Hires (${summary.hires.length})`, h('span', { class: 'loss' }, `-${money(summary.hireCost)}`)) : null,
       unlock: unlocked ? mkRow('New Unlocks', h('span', { class: 'good' }, 'Granted!')) : null,
       bonus: summary.firstClear ? mkRow('First-Clear Bonus', h('span', { class: 'good' }, `+${money(summary.firstClear)}`)) : null,
       reward: mkRow('Job Reward', rewardEl),
@@ -938,7 +969,7 @@ const UI = (() => {
         async () => { for (const s of starEls) { if (skip.next || skip.all) break; s.classList.add('visible'); FX.play('pop'); await sleep(170); } },
         async () => { crStars.classList.add('jc-pulse'); crCount.classList.add('jc-pulse'); FX.play('click'); await sleep(450); },
         async () => { rows.prefs.classList.add('visible'); rows.base.classList.add('visible'); rows.extras?.classList.add('visible'); await sleep(350); },
-        async () => { rows.fast?.classList.add('visible'); rows.sat.classList.add('visible'); rows.doubled?.classList.add('visible'); rows.damage?.classList.add('visible'); await sleep(350); },
+        async () => { rows.fast?.classList.add('visible'); rows.sat.classList.add('visible'); rows.doubled?.classList.add('visible'); rows.damage?.classList.add('visible'); rows.hires?.classList.add('visible'); await sleep(350); },
         async () => { if (rows.unlock) { rows.unlock.classList.add('visible'); FX.play('win'); } rows.bonus?.classList.add('visible'); await sleep(350); },
         async () => { rows.reward.classList.add('visible'); await tween(rewardEl, 0, summary.reward, 800, (n) => `+${money(n)}`); },
         async () => { rows.bank.classList.add('visible'); await tween(bankEl, bankBefore, bankBefore + summary.reward, 800, money); }
@@ -1003,7 +1034,8 @@ function confirmExecute(r) {
           h('span', {}, 'Job Payout'), h('b', {}, money(r.reward)),
           h('small', {}, `Completion ${money(r.base)}`
             + (r.timed ? ` · Fast Planning ${r.fast ? `+${money(r.fastBonus)}` : 'missed'}` : '')
-            + ` · Satisfaction ${r.satHit ? `+${money(r.satBonus)}` : 'missed'}`)),
+            + ` · Satisfaction ${r.satHit ? `+${money(r.satBonus)}` : 'missed'}`
+            + (r.hireCost ? ` · Specialty Hires -${money(r.hireCost)}` : ''))),
         unseated ? h('p', { class: 'warn' }, `${unseated} employee${unseated === 1 ? ' is' : 's are'} unassigned: they will not be moved and count as unsatisfied.`) : null,
         state.job.mods?.includes('fragile') ? h('p', { class: 'warn' }, 'Fragile Goods: any object that breaks is replaced and its cost is deducted from this payout.') : null,
         h('div', { class: 'row' },

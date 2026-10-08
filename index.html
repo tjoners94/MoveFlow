@@ -34,11 +34,13 @@
         <svg id="game-board" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"></svg>
       </div>
       <div id="zoom-controls">
+        <button class="squircle zoom-btn heat-btn" id="heat-btn" type="button" aria-pressed="false" aria-label="Activity Heatmap" title="Activity Heatmap: show where the foot traffic was" hidden>🔥</button>
         <button class="squircle zoom-btn analyze-btn" id="analyze-btn" type="button" aria-pressed="false" aria-label="Analyze" title="Analyze: dim the floor plans and chart seating and departments">📊</button>
         <button class="squircle zoom-btn" id="zoom-out" type="button" aria-label="Zoom out">&minus;</button>
         <button class="squircle zoom-btn" id="zoom-in" type="button" aria-label="Zoom in">+</button>
       </div>
       <div id="toast" hidden></div>
+      <div id="heat-key" hidden><span>Foot traffic</span><i></i><span>Low</span><span>High</span></div>
       <div id="exec-summary" hidden>
         <div class="sum-confetti" id="sum-confetti" aria-hidden="true"></div>
         <div class="sum-title">🎉 Move Complete!</div>

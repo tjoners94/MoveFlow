@@ -61,6 +61,7 @@ function setPhase(phase, detail = '') {
   }
   const sp = document.getElementById('speed-btn');
   if (sp) sp.hidden = phase === 'planning' || phase === 'done';
+  if (typeof updateHeatmap === 'function') updateHeatmap();
 }
 
 const Exec = (() => {
@@ -161,11 +162,13 @@ const Exec = (() => {
     if (pawn.fl === fl) return;
     pawn.fl.live.delete(pawn);
     pawn.fl = fl;
+    pawn.tx = undefined;
     if (!pawn.hidden) fl.live.add(pawn);
     fl.walkers.append(pawn.g);
   }
   function setHidden(pawn, v) {
     pawn.hidden = v;
+    pawn.tx = undefined;
     pawn.g.style.display = v ? 'none' : '';
     if (v) pawn.fl.live.delete(pawn); else pawn.fl.live.add(pawn);
   }
@@ -632,6 +635,8 @@ const Exec = (() => {
     for (const fl of state.floors) {
       fl.live = new Set();
       fl.spots = {};
+      fl.heat = new Float32Array(fl.layout.width * fl.layout.height);
+      fl.heatDrawn = false;
       const tasks = [];
       for (const ws of state.workstations) {
         if (ws.floor !== fl.idx || ws.assignedEmployeeId === null) continue;
@@ -940,6 +945,24 @@ const Exec = (() => {
     }
   }
 
+  // Foot traffic: every cell a pawn walks through earns the distance walked there (one cell crossed = 1).
+  function trackTraffic() {
+    for (const fl of state.floors) {
+      const W = fl.layout.width;
+      const H = fl.layout.height;
+      for (const p of fl.live) {
+        if (p.tx !== undefined) {
+          const d = Math.hypot(p.x - p.tx, p.y - p.ty);
+          const cx = Math.floor(p.x / 10);
+          const cy = Math.floor(p.y / 10);
+          if (d > 0.01 && d < 40 && cx >= 0 && cy >= 0 && cx < W && cy < H) fl.heat[cy * W + cx] += d / 10;
+        }
+        p.tx = p.x;
+        p.ty = p.y;
+      }
+    }
+  }
+
   function tick(ts) {
     raf = requestAnimationFrame(tick);
     if (!sim || sim.gen !== state.gen) { stop(); return; }
@@ -952,6 +975,7 @@ const Exec = (() => {
       rem -= d;
       sim.t += d;
       if (sim.mode === 'execute') stepExecute(d); else if (sim.mode === 'dawn') stepDawn(d); else stepFeedback(d);
+      if (sim) trackTraffic();
     }
     animatePawns();
   }

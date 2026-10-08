@@ -15,16 +15,20 @@ const UPGRADES = [
 const upgradeCost = (u, level) => u.base * level;
 
 // Item i of each list unlocks when campaign mission i is first completed.
+// Specialty Hires: [icon, name, perk, cost as a share of the job's reward subtotal]. Hire number N is unlocked by campaign mission N,
+// but each one is bought per job (see jobRewards) and is spent on that job only.
 const HIRES = [
-  ['⚡', 'Speed Demon', 'Movers are 20% faster, and Rainstorm’s retrieval slowdown is halved.'],
-  ['🏋️', 'Heavy Lifter', 'Furniture deploys 40% faster, and Narrow Doors costs only 1.5x.'],
-  ['🛡️', 'Careful Carl', 'Bonus rewards +10%, and Fragile Goods break 40% less.'],
-  ['🧹', 'Clean Freak', 'Plants and computers deploy 50% faster, and Cleaning takes only 2.5s per desk.'],
-  ['🥷', 'Ninja Mover', 'Movers walk 33% faster.'],
-  ['🤖', 'Robo-Loader', 'Every deploy takes 15% less time, and +2 Movers per floor.'],
-  ['🧗', 'Stair Master', 'Movers climb stairs instantly, even with No Elevators.'],
-  ['🦸', 'The Hero', '+5% Fast Planning window, and Rush Job cuts the Time Limit to 60% instead of 50%.']
+  ['⚡', 'Speed Demon', 'Movers are 20% faster, and Rainstorm’s retrieval slowdown is halved.', 0.05],
+  ['🏋️', 'Heavy Lifter', 'Furniture deploys 40% faster, and Narrow Doors costs only 1.5x.', 0.04],
+  ['🛡️', 'Careful Carl', 'Bonus rewards +10%, and Fragile Goods break 40% less.', 0.06],
+  ['🧹', 'Clean Freak', 'Plants and computers deploy 50% faster, and Cleaning takes only 2.5s per desk.', 0.04],
+  ['🥷', 'Ninja Mover', 'Movers walk 33% faster.', 0.06],
+  ['🤖', 'Robo-Loader', 'Every deploy takes 15% less time, and +2 Movers per floor.', 0.08],
+  ['🧗', 'Stair Master', 'Movers climb stairs instantly, even with No Elevators.', 0.04],
+  ['🦸', 'The Hero', '+5% Fast Planning window, and Rush Job cuts the Time Limit to 60% instead of 50%.', 0.07]
 ];
+const HIRE_MIN_COST = 50;
+const hireCost = (i, subtotal) => Math.max(HIRE_MIN_COST, Math.round(subtotal * HIRES[i][3]));
 
 // Optional riders on Random Jobs: each makes the contract harder and pays more.
 const MODIFIERS = [
@@ -54,18 +58,18 @@ const clientRoomCount = (client) => Object.values(client.rooms).reduce((a, b) =>
 const Perks = (() => {
   const lvl = (k) => Save.perkLevel(k);
   const full = (k) => lvl(k) / (MAX_UPGRADE_LEVEL - 1); // 0 at level 1, 1 at level 10
-  const hire = (i) => Save.isUnlocked('hires', i);
+  const hire = (i, job = state.job) => !!job?.hires?.includes(i);
   const mod = (id, job = state.job) => !!job?.mods?.includes(id);
   const owned = (cat) => [0, 1, 2, 3, 4, 5, 6, 7].filter((i) => Save.isUnlocked(cat, i)).length;
 
   return {
     // Share of the Time Limit within which planning counts as fast.
-    fastShare: () => 0.75 + 0.1 * full('headcount') + (hire(7) ? 0.05 : 0),
+    fastShare: (job) => 0.75 + 0.1 * full('headcount') + (hire(7, job) ? 0.05 : 0),
     speedMult: () => (1 + 0.5 * full('speed')) * (hire(0) ? 1.2 : 1),
     payMult: () => (1 + 0.5 * full('capacity')) * (1 + 0.01 * Math.max(0, owned('uniforms') - 1)),
     // Satisfaction needed for the bonus: the job's goal, raised by Angry Boss and lowered by Diligence.
     satGoal: (job) => Math.min(1, Math.max(0.1, (job?.satGoal ?? 0.6) + (mod('angry', job) ? 0.1 : 0) - 0.25 * full('diligence'))),
-    bonusMult: () => 1 + (hire(2) ? 0.1 : 0),
+    bonusMult: (job) => 1 + (hire(2, job) ? 0.1 : 0),
     walkMult: () => (hire(4) ? 0.75 : 1),
     // Movers use the stairs when No Elevators is on; otherwise the service elevator (or loading dock on the ground floor).
     stairsOnly: () => mod('noElevators'),
@@ -104,14 +108,21 @@ function jobRewards(job) {
   const bonus = Math.round(subtotal * (CFG.bonusShare / 100) * Perks.bonusMult(job));
   const fastBonus = job.timeLimit ? bonus : 0;
   const factor = job.allMods ? 2 : 1;
-  const total = (earnedFast = true, earnedSat = true) => (subtotal + (earnedFast ? fastBonus : 0) + (earnedSat ? bonus : 0)) * factor;
-  return { completion, mult, difficulty, mods, company, subtotal, fastBonus, satBonus: bonus, fastShare: Perks.fastShare(job), factor, total };
+  const gross = (earnedFast = true, earnedSat = true) => (subtotal + (earnedFast ? fastBonus : 0) + (earnedSat ? bonus : 0)) * factor;
+  // Specialty Hires are paid for out of the payout once the job is done, so a failed or aborted job costs nothing.
+  const hires = (job.hires || []).filter((i) => HIRES[i]).map((i) => ({ id: i, icon: HIRES[i][0], name: HIRES[i][1], amount: hireCost(i, subtotal) }));
+  const hireTotal = hires.reduce((t, x) => t + x.amount, 0);
+  const total = (earnedFast = true, earnedSat = true) => gross(earnedFast, earnedSat) - hireTotal;
+  return { completion, mult, difficulty, mods, company, subtotal, fastBonus, satBonus: bonus, fastShare: Perks.fastShare(job), factor, hires, hireTotal, gross, total };
 }
 
-// A job with the chosen modifiers applied to its time limit.
-function applyMods(job, ids) {
+// A job with the chosen modifiers applied to its time limit. hires defaults to the job's own.
+function applyMods(job, ids, hires = job.hires || []) {
   const base = job.base || { timeLimit: job.timeLimit, rewardMult: job.rewardMult };
   let time = base.timeLimit;
-  if (ids.includes('rush')) time = Math.round(((time || job.employees * SECONDS_PER_EMPLOYEE * 2) * (Save.isUnlocked('hires', 7) ? 0.6 : 0.5)) / 10) * 10;
+  if (ids.includes('rush')) time = Math.round(((time || job.employees * SECONDS_PER_EMPLOYEE * 2) * (hires.includes(7) ? 0.6 : 0.5)) / 10) * 10;
   return { ...job, base, mods: ids, timeLimit: time };
 }
+
+// Mission N (after the first) carries every modifier that missions 1 to N-1 unlocked, so the Grand Finale runs them all.
+CAMPAIGN.forEach((j, i) => { j.modIds = MODIFIERS.slice(0, i).map((m) => m.id); });

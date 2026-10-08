@@ -369,6 +369,19 @@ input[type=text]:focus { border-color: #3b82f6; }
 .rider.on { background: #fde68a; border-color: #f59e0b; color: #78350f; }
 .rider.locked { opacity: .5; cursor: not-allowed; }
 .rider.static { cursor: default; }
+.hire-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 6px 0 8px; }
+.hire-card { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; text-align: left; border-radius: 14px; border: 2px solid var(--border-faint); background: var(--card-bg); color: var(--text-main); font-family: var(--font-stack); cursor: pointer; transition: transform .15s, background .15s, border-color .15s; }
+.hire-card:hover { transform: translateY(-1px); }
+.hire-card.on { background: #dbeafe; border-color: #3b82f6; color: #1e3a8a; }
+.dark .hire-card.on { background: rgba(59, 130, 246, .25); color: #bfdbfe; }
+.hire-top { display: flex; align-items: center; gap: 6px; }
+.hire-icon { font-size: 18px; line-height: 1; }
+.hire-top b { flex: 1; font-size: 13px; }
+.hire-cost { font-size: 12px; font-weight: 800; color: #b91c1c; }
+.hire-card.on .hire-cost { color: #1d4ed8; }
+.hire-card small { font-size: 11px; font-weight: 600; line-height: 1.3; color: var(--text-muted); }
+.hire-card.on small { color: inherit; opacity: .85; }
+@media (max-width: 560px) { .hire-grid { grid-template-columns: 1fr; } }
 .stat-widget { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 66px; padding: 10px 4px; border-radius: 16px; background: var(--squircle-bg-solid); border: 2px solid var(--border-faint); }
 .stat-widget small { font-size: 10px; font-weight: 800; text-transform: uppercase; white-space: nowrap; color: var(--text-muted); }
 .stat-widget b { font-size: 15px; white-space: nowrap; color: var(--text-dark); }

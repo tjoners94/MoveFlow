@@ -102,46 +102,43 @@ function clientFor(industry, n) {
   return { name, blurb };
 }
 
+// The campaign climbs from a one-room startup to a four-building media campus. Every mission has a fixed seed, so it is the same
+// job on every playthrough. After the first, a mission carries every Job Modifier the missions before it unlocked (see perks.js).
+// slack is the planning-time allowance per employee at that point (the Rush Job halving is already priced in from mission 4 on).
 const CAMPAIGN = [
   { id: 'c1', icon: '🟢', name: 'Introductory Job', desc: 'Pro-bono move for a tiny tech startup.', industry: 'startup', employees: 6, timeLimit: 600, rewardMult: 1, seed: 101 },
-  { id: 'c2', icon: '🟡', name: 'Corporate Shuffle', desc: 'Reorganize a boutique law firm.', industry: 'law', employees: 8, timeLimit: 540, rewardMult: 1.2, seed: 202 },
-  { id: 'c3', icon: '🔴', name: 'The Big Migration', desc: 'Move a busy medical clinic.', industry: 'medical', employees: 8, timeLimit: 480, rewardMult: 1.4, seed: 303 },
-  { id: 'c4', icon: '🟢', name: 'Startup Scaling', desc: 'Settle new hires into a design studio.', industry: 'design', employees: 10, timeLimit: 420, rewardMult: 1.6, seed: 404 },
-  { id: 'c5', icon: '🟡', name: 'Merger Madness', desc: 'Combine two bank branches.', industry: 'bank', employees: 10, timeLimit: 360, rewardMult: 1.8, seed: 505 },
-  { id: 'c6', icon: '🔴', name: 'Skyscraper Drop', desc: 'Pack a university department into a three-floor tower.', industry: 'university', employees: 12, timeLimit: 300, rewardMult: 2, seed: 606 },
-  { id: 'c7', icon: '🟡', name: 'Rush Hour', desc: 'The research lab opens Monday, split across two buildings.', industry: 'research', employees: 12, timeLimit: 240, rewardMult: 2.4, seed: 707 },
-  { id: 'c8', icon: '🔴', name: 'Grand Finale', desc: 'Relocate a media station: studio lot plus admin tower.', industry: 'media', employees: 12, timeLimit: 180, rewardMult: 3, seed: 808 }
+  { id: 'c2', icon: '🟡', name: 'Corporate Shuffle', desc: 'Reorganize a boutique law firm across two floors. The elevators are out of order.', industry: 'law', employees: 20, slack: 2.2, rewardMult: 1.2, seed: 202,
+    sites: [{ name: 'Firm Offices', floors: 2 }] },
+  { id: 'c3', icon: '🔴', name: 'The Big Migration', desc: 'Move a busy medical clinic into a three-storey tower, mind the glassware.', industry: 'medical', employees: 40, slack: 2, rewardMult: 1.4, seed: 311,
+    sites: [{ name: 'Clinic Tower', floors: 3 }] },
+  { id: 'c4', icon: '🟢', name: 'Startup Scaling', desc: 'A design studio doubled in size overnight and now spans two buildings. Everything is urgent.', industry: 'design', employees: 70, slack: 1.6, rewardMult: 1.6, seed: 404,
+    sites: [{ name: 'Studio North', floors: 2 }, { name: 'Studio South', floors: 1 }] },
+  { id: 'c5', icon: '🟡', name: 'Merger Madness', desc: 'Combine two bank branches, vault and all, on protective flooring.', industry: 'bank', employees: 105, slack: 1.5, rewardMult: 1.8, seed: 505,
+    sites: [{ name: 'North Branch', floors: 3, specials: { vault: 1, security: 1 } }, { name: 'South Branch', floors: 2, specials: { server: 1, briefing: 1 } }] },
+  { id: 'c6', icon: '🔴', name: 'Skyscraper Drop', desc: 'A university department moves into a four-floor tower and a lab annex, in the rain.', industry: 'university', employees: 145, slack: 1.4, rewardMult: 2, seed: 606,
+    sites: [{ name: 'University Tower', floors: 4, specials: { lecture: 1, library: 1 } }, { name: 'Lab Annex', floors: 2, specials: { lab: 1 } }] },
+  { id: 'c7', icon: '🟡', name: 'Rush Hour', desc: 'The research lab opens Monday, split across three buildings. The doors are narrower than the plans said.', industry: 'research', employees: 185, slack: 1.3, rewardMult: 2.4, seed: 707,
+    sites: [{ name: 'Lab Block', floors: 3, specials: { lab: 1, cleanroom: 1, server: 1 } }, { name: 'Workshop Annex', floors: 2, specials: { workshop: 1 } }, { name: 'Admin Block', floors: 2 }] },
+  { id: 'c8', icon: '🔴', name: 'Grand Finale', desc: 'Relocate an entire media station: studio lot, admin tower, broadcast annex and archive. Every hazard you have met, at once.', industry: 'media', employees: 220, slack: 1.2, rewardMult: 3, seed: 808,
+    sites: [{ name: 'Studio Lot', floors: 3, specials: { studio: 1, control: 1, server: 1 } }, { name: 'Admin Tower', floors: 3 }, { name: 'Broadcast Annex', floors: 2 }, { name: 'Archive', floors: 2 }] }
 ].map((j, i) => ({ ...j, campaign: true, timeOfDay: TIME_KEYS[i % TIME_KEYS.length], specials: { ...INDUSTRIES[j.industry].rooms }, client: clientFor(j.industry, i) }));
 
-// Thematic campuses: which buildings a mission spans, how tall they are, and which industry rooms live where.
-const CAMPAIGN_SITES = {
-  c5: [{ name: 'North Branch', floors: 1, specials: { vault: 1, security: 1 } }, { name: 'South Branch', floors: 1, specials: { server: 1, briefing: 1 } }],
-  c6: [{ name: 'University Tower', floors: 3 }],
-  c7: [{ name: 'Lab Block', floors: 2, specials: { lab: 1, cleanroom: 1, server: 1 } }, { name: 'Workshop Annex', floors: 1, specials: { workshop: 1 } }],
-  c8: [{ name: 'Studio Lot', floors: 1, specials: { studio: 1, control: 1, server: 1 } }, { name: 'Admin Tower', floors: 2 }]
-};
-CAMPAIGN.forEach((j) => { if (CAMPAIGN_SITES[j.id]) j.sites = CAMPAIGN_SITES[j.id]; });
-
-// Floor-plan requirements per mission: private offices, receptionist, near-phone staff, phone rooms.
+// Floor-plan requirements for the small early missions; bigger ones use the same size-based defaults as Random Jobs.
 const CAMPAIGN_RULES = {
   c1: { offices: 1, receptionist: false, nearPhone: 0, phoneRooms: 0, cafe: 0, managers: 0 },
-  c2: { offices: 2, receptionist: true, nearPhone: 1, phoneRooms: 1, cafe: 0, managers: 1 },
-  c3: { offices: 2, receptionist: true, nearPhone: 1, phoneRooms: 1, cafe: 0, managers: 1 },
-  c4: { offices: 2, receptionist: true, nearPhone: 2, phoneRooms: 2, cafe: 0, managers: 2 },
-  c5: { offices: 3, receptionist: true, nearPhone: 2, phoneRooms: 2, cafe: 1, managers: 2 },
-  c6: { offices: 3, receptionist: true, nearPhone: 2, phoneRooms: 2, cafe: 1, managers: 2 },
-  c7: { offices: 3, receptionist: true, nearPhone: 3, phoneRooms: 2, cafe: 1, managers: 3 },
-  c8: { offices: 4, receptionist: true, nearPhone: 3, phoneRooms: 3, cafe: 2, managers: 3 }
+  c2: { offices: 2, receptionist: true, nearPhone: 2, phoneRooms: 1, cafe: 0, managers: 2 }
 };
 CAMPAIGN.forEach((j) => Object.assign(j, CAMPAIGN_RULES[j.id]));
 // Satisfaction goal: the share of the crew whose preference should be met (rises with the mission number).
-CAMPAIGN.forEach((j, i) => { j.satGoal = Math.round((0.5 + i * 0.04) * 100) / 100; });
+CAMPAIGN.forEach((j, i) => { j.satGoal = Math.round((0.5 + i * 0.03) * 100) / 100; });
 // Cargo load: how many plants, computers and furniture pieces each employee brings (0 = boxes only).
 CAMPAIGN.forEach((j, i) => { j.cargoLoad = Math.round((0.1 + i * 0.08) * 100) / 100; });
 
 // Random contracts scale with headcount; the campus (buildings x floors) follows from it (see campus.js).
 // Time limits assume the average employee takes SECONDS_PER_EMPLOYEE to place, times a per-tier slack (0 = untimed).
 const SECONDS_PER_EMPLOYEE = 60;
+// Missions from the 4th on carry Rush Job (half the time), so their base limit is doubled to leave the intended slack.
+CAMPAIGN.forEach((j, i) => { if (j.slack) j.timeLimit = Math.round((j.employees * SECONDS_PER_EMPLOYEE * j.slack * (i >= 3 ? 2 : 1)) / 10) * 10; });
 const RANDOM_TIERS = [
   { tier: 'chill', icon: '⚪', name: 'Chill Contract', people: [8, 12], slack: 0, rewardMult: 0.8, satGoal: 0.5, cargoLoad: 0.1 },
   { tier: 'easy', icon: '🟢', name: 'Easy Contract', people: [25, 45], slack: 2, rewardMult: 1, satGoal: 0.6, cargoLoad: 0.25 },

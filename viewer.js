@@ -174,5 +174,90 @@ function updateCharts() {
 
 document.getElementById('analyze-btn').addEventListener('click', () => {
   state.analyze = !state.analyze;
+  if (state.analyze) state.heatmap = false;
   updateCharts();
+  updateHeatmap();
+});
+
+// ---------- Activity Heatmap: foot traffic recorded during Execute and Feedback, shown once the job is done ----------
+const HEAT_STOPS = [[0, [59, 130, 246]], [0.35, [34, 197, 94]], [0.6, [250, 204, 21]], [0.8, [249, 115, 22]], [1, [220, 38, 38]]];
+const HEAT_LEVELS = 24;
+
+function heatColor(t) {
+  let i = 1;
+  while (i < HEAT_STOPS.length - 1 && t > HEAT_STOPS[i][0]) i++;
+  const [t0, a] = HEAT_STOPS[i - 1];
+  const [t1, b] = HEAT_STOPS[i];
+  const k = Math.max(0, Math.min(1, (t - t0) / (t1 - t0)));
+  return `rgb(${a.map((v, n) => Math.round(v + (b[n] - v) * k)).join(',')})`;
+}
+
+// Two 3x3 box-blur passes turn the per-cell walking totals into soft hot spots.
+function smoothHeat(grid, W, H) {
+  let src = grid;
+  for (let pass = 0; pass < 2; pass++) {
+    const out = new Float32Array(src.length);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        let sum = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && ny >= 0 && nx < W && ny < H) sum += src[ny * W + nx];
+        }
+        out[y * W + x] = sum / 9;
+      }
+    }
+    src = out;
+  }
+  return src;
+}
+
+function drawHeatmaps() {
+  const floors = state.floors.filter((fl) => fl.heat);
+  const smooth = floors.map((fl) => smoothHeat(fl.heat, fl.layout.width, fl.layout.height));
+  const used = smooth.flatMap((g) => [...g].filter((v) => v > 0.01)).sort((a, b) => a - b);
+  const max = Math.max(1e-6, used.length ? used[Math.floor((used.length - 1) * 0.97)] : 0);
+  floors.forEach((fl, n) => {
+    const W = fl.layout.width;
+    const H = fl.layout.height;
+    const grid = smooth[n];
+    const blur = chartNode('filter', { id: `heat-blur-${fl.idx}`, x: '-5%', y: '-5%', width: '110%', height: '110%' });
+    blur.append(chartNode('feGaussianBlur', { stdDeviation: 3.5 }));
+    const cells = chartNode('g', { filter: `url(#heat-blur-${fl.idx})` });
+    for (let y = 0; y < H; y++) {
+      let x = 0;
+      while (x < W) {
+        const level = Math.round(Math.min(1, Math.sqrt(grid[y * W + x] / max)) * HEAT_LEVELS);
+        let end = x + 1;
+        while (end < W && Math.round(Math.min(1, Math.sqrt(grid[y * W + end] / max)) * HEAT_LEVELS) === level) end++;
+        if (level > 0) {
+          const t = level / HEAT_LEVELS;
+          cells.append(chartNode('rect', { x: x * 10, y: y * 10, width: (end - x) * 10, height: 10, fill: heatColor(t), 'fill-opacity': (0.25 + 0.6 * t).toFixed(2) }));
+        }
+        x = end;
+      }
+    }
+    fl.heatG.replaceChildren(blur, cells);
+    fl.heatDrawn = true;
+  });
+}
+
+function updateHeatmap() {
+  const btn = document.getElementById('heat-btn');
+  const available = state.phase === 'done' && state.floors.some((fl) => fl.heat);
+  if (!available) state.heatmap = false;
+  btn.hidden = !available;
+  const on = !!state.heatmap;
+  btn.classList.toggle('on', on);
+  btn.setAttribute('aria-pressed', String(on));
+  svg.classList.toggle('heatmap', on);
+  document.getElementById('heat-key').hidden = !on;
+  if (on && state.floors.some((fl) => fl.heat && !fl.heatDrawn)) drawHeatmaps();
+}
+
+document.getElementById('heat-btn').addEventListener('click', () => {
+  state.heatmap = !state.heatmap;
+  if (state.heatmap) { state.analyze = false; updateCharts(); }
+  updateHeatmap();
 });

@@ -239,6 +239,7 @@ const WIKI = [
               '**View All (buildings):** stacks every building in an {{isometric projection}}. Press the second View All to flatten it overhead.',
               '**View All (floors):** shows every floor of one building side by side.',
               '**Analyze (chart button):** dims the plans and charts each floor: seat {{utilization}} for Open Seating and Offices, plus a pie of employees by department. Handy as a poor man\'s {{stacking plan}}.',
+              '**Activity Heatmap (flame button):** appears left of Analyze once the move is complete. Dims the plans and colors every floor by how much foot traffic it saw, from blue (light) to red (heavy).',
               '**Legend:** explains the colors and symbols on the map. Think of it as light {{wayfinding}}.',
               '**Pin (employee card):** docks the card beside the map so it stays put.',
               '**Speed (during Execute):** cycles 1x, 2x, 4x and 8x.'
@@ -377,7 +378,8 @@ const WIKI = [
           {
             ul: [
               '**Enable All:** switching on every modifier at once doubles the entire payout.',
-              '**Breakage:** with Fragile Goods, every smashed object is deducted from the payout.'
+              '**Breakage:** with Fragile Goods, every smashed object is deducted from the payout.',
+              '**Specialty Hires:** each hire you bought for the job is a line item, paid from the payout. See [[hires]].'
             ]
           },
           { note: 'The briefing before a job lists all of these, itemized, so there are no surprises.' }
@@ -412,11 +414,12 @@ const WIKI = [
       {
         id: 'hires', title: 'Specialty Hires',
         flavor: 'Resumes that actually read like superhero origin stories.',
-        tldr: 'Eight special crew members, each unlocked by finishing a campaign mission. Their perks apply automatically.',
-        eli5: 'Special helpers join your team and give you superpowers.',
+        tldr: 'Eight specialists, each unlocked by a campaign mission. Hire any of them for a single job on its briefing; each costs a share of that job\'s reward.',
+        eli5: 'Special helpers you can rent for one job at a time. Pick the ones that fix that job\'s problems.',
         body: () => [
-          'Hire number N unlocks when you complete campaign mission N. See [[campaign]].',
-          { table: [['Hire', 'Perk'], ...HIRES.map((x) => [`${x[0]} ${x[1]}`, x[2]])] }
+          'Hire number N unlocks when you complete campaign mission N. See [[campaign]]. Unlocking is permanent, but a hire is a consumable: you choose it on a job\'s briefing, it works for that job only, and it is available again next time.',
+          'You can hire several specialists for one job, but never two of the same kind. Each shows up as a line item under Rewards, costs a share of that job\'s reward subtotal (so bigger, harder jobs cost more), and is paid out of the payout when the job is completed. A failed or aborted job costs nothing.',
+          { table: [['Hire', 'Perk', 'Cost'], ...HIRES.map((x) => [`${x[0]} ${x[1]}`, x[2], `${Math.round(x[3] * 100)}% of the subtotal (at least ${money(HIRE_MIN_COST)})`])] }
         ]
       },
       {
@@ -444,13 +447,13 @@ const WIKI = [
       {
         id: 'campaign', title: 'Campaign Missions',
         flavor: 'Eight missions. Eight chances to learn that "it is just a quick move" is never true.',
-        tldr: 'Curated missions that rise in difficulty. Each is locked until the one before it is done.',
-        eli5: 'The story levels. Beat one to open the next.',
+        tldr: 'Eight missions that climb from one startup room to a four-building media campus. Each is locked until the one before it is done, and each is the same job every time.',
+        eli5: 'The story levels. Beat one to open the next. They start small and get big.',
         body: () => [
-          'Campaign missions are fixed: same people, same floors every time. They never carry modifiers.',
-          { table: [['Mission', 'Client type', 'Crew', 'Time', 'Reward'],
-            ...CAMPAIGN.map((j) => [`${j.icon} ${j.name}`, industryOf(j).name, String(j.employees), wikiMins(j.timeLimit), `x${j.rewardMult}`])] },
-          'The first time you complete a mission, you unlock one item in every category and earn a first-clear bonus. See [[unlocks]] and [[payouts]].'
+          'Campaign missions use fixed seeds: the same people and floor plans on every playthrough. After the first, each mission carries every {{rider}} that the missions before it unlocked, so the Grand Finale runs all of them at once. Specialty Hires are your answer. See [[hires]].',
+          { table: [['Mission', 'Client type', 'Crew', 'Campus', 'Modifiers', 'Time', 'Reward'],
+            ...CAMPAIGN.map((j) => { const p = planCampus(j, j.employees); return [`${j.icon} ${j.name}`, industryOf(j).name, String(j.employees), `${p.sites.length} building${p.sites.length === 1 ? '' : 's'}, ${p.floors.length} floor${p.floors.length === 1 ? '' : 's'}`, String(j.modIds.length), wikiMins(j.timeLimit), `x${j.rewardMult}`]; })] },
+          'Time is the base limit before Rush Job halves it. The first time you complete a mission, you unlock one item in every category and earn a first-clear bonus. See [[unlocks]] and [[payouts]].'
         ]
       },
       {
@@ -475,10 +478,10 @@ const WIKI = [
       {
         id: 'modifiers', title: 'Job Modifiers',
         flavor: 'Each is a {{rider}} on your contract. Terms and conditions do apply.',
-        tldr: 'Optional hazards on Random Jobs. Each pays +10%, and each has a counter in upgrades or hires.',
+        tldr: 'Hazards that make a job harder and pay +10% each. Random Jobs roll some; Campaign missions carry a fixed set. Each has a counter in upgrades or hires.',
         eli5: 'Modifiers are extra rules that make the game harder in exchange for more coins.',
         body: () => [
-          'Modifiers unlock one at a time through the campaign. In a random briefing you can switch on Enable All for double the payout. Campaign missions never use them.',
+          'Modifiers unlock one at a time through the campaign. In a random briefing you can switch on Enable All for double the payout. Campaign missions carry a fixed set instead: every modifier unlocked by the missions before them.',
           { table: [['Modifier', 'Effect', 'Counter'], ...MODIFIERS.map((m) => [`${m.icon} ${m.name}`, m.desc, RIDER_COUNTERS[m.id] === 'TBD' ? 'None yet' : RIDER_COUNTERS[m.id]])] }
         ]
       },

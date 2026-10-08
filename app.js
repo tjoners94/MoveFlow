@@ -143,6 +143,7 @@ const state = {
   focus: { b: 0, f: 0 }, // the selected floor
   mode: 'floor', // floor | building | iso | campus (see viewer.js)
   analyze: false,
+  heatmap: false,
   world: { x: 0, y: 0, w: COLS * 10, h: ROWS * 10 },
   workstations: [],
   employees: [],
@@ -567,7 +568,11 @@ function renderBoard() {
     fl.chart.setAttribute('class', 'chart-layer');
     fl.chart.setAttribute('pointer-events', 'none');
     fl.light = Lighting.build(fl, tod);
-    fl.g.append(fl.light, fl.dyn, fl.links, fl.walkers, fl.chart);
+    fl.heatG = document.createElementNS(SVG_NS, 'g');
+    fl.heatG.setAttribute('class', 'heat-layer');
+    fl.heatG.setAttribute('pointer-events', 'none');
+    fl.heatDrawn = false;
+    fl.g.append(fl.light, fl.dyn, fl.links, fl.walkers, fl.heatG, fl.chart);
     svg.appendChild(fl.g);
   }
   overlay = document.createElementNS(SVG_NS, 'g');
@@ -1482,11 +1487,11 @@ function evaluate() {
   const satHit = total > 0 && met / total >= Perks.satGoal(state.job);
   const fastBonus = fast ? pay.fastBonus : 0;
   const satBonus = satHit ? pay.satBonus : 0;
-  const gross = pay.total(fast, satHit);
+  const gross = pay.gross(fast, satHit);
   return {
     met, total, rating, base: pay.completion, extras: pay.subtotal - pay.completion, timed: limit > 0, fast, fastBonus, satHit, satBonus,
-    doubled: gross - pay.total(fast, satHit) / pay.factor, damage: state.damage, broken: state.broken,
-    reward: Math.max(0, gross - state.damage), employees: state.employees.length
+    doubled: gross - gross / pay.factor, damage: state.damage, broken: state.broken, hires: pay.hires, hireCost: pay.hireTotal,
+    reward: Math.max(0, gross - pay.hireTotal - state.damage), employees: state.employees.length
   };
 }
 
